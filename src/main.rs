@@ -107,51 +107,71 @@ fn rx_loop(link: &RawLink, upstream: Upstream, verbose: bool) -> io::Error {
     }
 }
 
-/// Sends one packet from upstream as an Ethernet frame.
-///
-/// While the interface is down, packets are dropped instead of failing:
-/// Reticulum already copes with loss. `dropping` tracks that state so the
-/// outage is logged once, not once per packet.
-fn transmit(
-    link: &RawLink,
-    src: &frame::Mac,
-    payload: &[u8],
-    dropping: &mut bool,
+/// Sending side state shared by both upstream modes.
+struct Tx<'a> {
+    link: &'a RawLink,
+    src: frame::Mac,
+    /// Largest payload the interface MTU allows.
+    limit: usize,
+    /// Set while the interface is down, so the outage is logged once.
+    dropping: bool,
     verbose: bool,
-) -> io::Result<()> {
-    let eth = match frame::build(&GROUP, src, payload) {
-        Ok(f) => f,
-        Err(e) => {
-            log!("dropped outbound packet: {e}");
+}
+
+impl<'a> Tx<'a> {
+    fn new(link: &'a RawLink, limit: usize, verbose: bool) -> Self {
+        Self { link, src: link.mac(), limit, dropping: false, verbose }
+    }
+
+    /// Sends one packet from upstream as an Ethernet frame.
+    ///
+    /// While the interface is down, packets are dropped instead of failing:
+    /// Reticulum already copes with loss. Packets larger than the interface
+    /// MTU allows are dropped too. If the MTU shrinks while running, this
+    /// fails so that rtp exits and is restarted, letting RtpInterface adapt.
+    fn send(&mut self, payload: &[u8]) -> io::Result<()> {
+        if payload.len() > self.limit {
+            log!("dropped outbound packet: {} bytes exceeds {} (interface MTU)", payload.len(), self.limit);
             return Ok(());
         }
-    };
-    match link.send(&eth) {
-        Ok(()) => {
-            if *dropping {
-                log!("sending again");
-                *dropping = false;
+        let eth = match frame::build(&GROUP, &self.src, payload) {
+            Ok(f) => f,
+            Err(e) => {
+                log!("dropped outbound packet: {e}");
+                return Ok(());
             }
-        }
-        Err(e) if link::is_link_down(&e) => {
-            if !*dropping {
-                log!("cannot send ({e}), dropping packets until the interface is back");
-                *dropping = true;
+        };
+        match self.link.send(&eth) {
+            Ok(()) => {
+                if self.dropping {
+                    log!("sending again");
+                    self.dropping = false;
+                }
             }
-            return Ok(());
+            Err(e) if link::is_link_down(&e) => {
+                if !self.dropping {
+                    log!("cannot send ({e}), dropping packets until the interface is back");
+                    self.dropping = true;
+                }
+                return Ok(());
+            }
+            Err(e) if e.raw_os_error() == Some(libc::EMSGSIZE) => {
+                let mtu = self.link.mtu().map_or_else(|e| format!("unknown ({e})"), |m| m.to_string());
+                return Err(io::Error::other(format!(
+                    "frame too large, interface MTU is now {mtu}; restarting to adapt"
+                )));
+            }
+            Err(e) => return Err(e),
         }
-        Err(e) => return Err(e),
+        if self.verbose {
+            log!("tx {} bytes", payload.len());
+        }
+        Ok(())
     }
-    if verbose {
-        log!("tx {} bytes", payload.len());
-    }
-    Ok(())
 }
 
 /// HDLC stdin -> Ethernet. Returns when stdin closes or on a fatal error.
-fn tx_loop_hdlc(link: &RawLink, verbose: bool) -> io::Result<()> {
-    let src = link.mac();
-    let mut dropping = false;
+fn tx_loop_hdlc(mut tx: Tx) -> io::Result<()> {
     let mut dec = hdlc::Decoder::new(frame::MAX_PAYLOAD);
     let mut buf = [0u8; 4096];
     let mut stdin = io::stdin().lock();
@@ -164,16 +184,14 @@ fn tx_loop_hdlc(link: &RawLink, verbose: bool) -> io::Result<()> {
         };
         for &b in &buf[..n] {
             if let Some(payload) = dec.push(b) {
-                transmit(link, &src, &payload, &mut dropping, verbose)?;
+                tx.send(&payload)?;
             }
         }
     }
 }
 
 /// Packet stdin -> Ethernet. Returns when the peer closes or on a fatal error.
-fn tx_loop_packet(link: &RawLink, verbose: bool) -> io::Result<()> {
-    let src = link.mac();
-    let mut dropping = false;
+fn tx_loop_packet(mut tx: Tx) -> io::Result<()> {
     let mut buf = vec![0u8; frame::MAX_PAYLOAD + 1];
     loop {
         let n = packet::recv(packet::STDIN, &mut buf)?;
@@ -184,7 +202,7 @@ fn tx_loop_packet(link: &RawLink, verbose: bool) -> io::Result<()> {
             log!("dropped outbound packet: {n} bytes exceeds {}", frame::MAX_PAYLOAD);
             continue;
         }
-        transmit(link, &src, &buf[..n], &mut dropping, verbose)?;
+        tx.send(&buf[..n])?;
     }
 }
 
@@ -214,6 +232,27 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    let limit = match link.mtu() {
+        Ok(mtu) => frame::max_payload_for(mtu),
+        Err(e) => {
+            log!("cannot read the MTU of {}: {e}", args.ifname);
+            return ExitCode::FAILURE;
+        }
+    };
+    if limit < frame::RETICULUM_MTU {
+        log!(
+            "interface MTU of {} is too small: Reticulum needs packets of {} bytes, \
+             which take an MTU of at least {}",
+            args.ifname,
+            frame::RETICULUM_MTU,
+            frame::RETICULUM_MTU + frame::RTP_HEADER_LEN
+        );
+        return ExitCode::FAILURE;
+    }
+    if limit < frame::MAX_PAYLOAD {
+        log!("interface MTU limits packets to {limit} bytes");
+    }
+
     log!(
         "up on {} (ifindex {}, mac {}, ethertype {:#06x}, {} upstream)",
         args.ifname,
@@ -242,9 +281,10 @@ fn main() -> ExitCode {
         std::process::exit(1);
     });
 
+    let tx = Tx::new(&link, limit, args.verbose);
     let res = match args.upstream {
-        Upstream::Hdlc => tx_loop_hdlc(&link, args.verbose),
-        Upstream::Packet => tx_loop_packet(&link, args.verbose),
+        Upstream::Hdlc => tx_loop_hdlc(tx),
+        Upstream::Packet => tx_loop_packet(tx),
     };
     match res {
         Ok(()) => {

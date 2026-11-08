@@ -22,6 +22,13 @@ pub const HEADER_LEN: usize = ETH_HEADER_LEN + RTP_HEADER_LEN;
 /// Standard Ethernet payload size, without jumbo frames.
 pub const ETH_MTU: usize = 1500;
 pub const MAX_PAYLOAD: usize = ETH_MTU - RTP_HEADER_LEN;
+/// Reticulum's base MTU: every interface must carry packets of this size.
+pub const RETICULUM_MTU: usize = 500;
+
+/// Largest payload that fits an interface with the given MTU.
+pub fn max_payload_for(if_mtu: usize) -> usize {
+    if_mtu.saturating_sub(RTP_HEADER_LEN).min(MAX_PAYLOAD)
+}
 
 /// Group address every node sends to and listens on.
 ///
@@ -157,6 +164,14 @@ mod tests {
         assert_eq!(parse(&f), Err(Error::BadLength { declared: 100, available: 1 }));
 
         assert_eq!(parse(&good[..10]), Err(Error::Truncated));
+    }
+
+    #[test]
+    fn payload_limit_follows_interface_mtu() {
+        assert_eq!(max_payload_for(1500), MAX_PAYLOAD);
+        assert_eq!(max_payload_for(9000), MAX_PAYLOAD);
+        assert_eq!(max_payload_for(1000), 996);
+        assert_eq!(max_payload_for(2), 0);
     }
 
     #[test]

@@ -19,18 +19,31 @@
 #     binary = /path/to/rtp
 #     respawn_delay = 2
 
+import fcntl
 import os
 import shutil
 import socket
+import struct
 import subprocess
 import threading
 import time
 
+SIOCGIFMTU = 0x8921
+
+
+def interface_mtu(device):
+    """Returns the MTU of a network interface, in its network namespace."""
+    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as s:
+        ifreq = struct.pack("16si20x", device.encode(), 0)
+        return struct.unpack("16si20x", fcntl.ioctl(s, SIOCGIFMTU, ifreq))[1]
+
 
 class RtpInterface(Interface):
     # Ethernet payload is 1500 bytes; rtp uses 4 for its own header. Leave
-    # room for the largest IFAC signature too, so any ifac_size fits.
-    ETH_PAYLOAD = 1496
+    # room for the largest IFAC signature too, so any ifac_size fits. On
+    # interfaces with a smaller MTU, update_mtu() lowers HW_MTU to match.
+    RTP_HEADER = 4
+    ETH_PAYLOAD = 1500 - RTP_HEADER
     IFAC_RESERVE = 64
     HW_MTU = ETH_PAYLOAD - IFAC_RESERVE
 
@@ -75,7 +88,26 @@ class RtpInterface(Interface):
         self.spawn()
         threading.Thread(target=self.read_loop, daemon=True).start()
 
+    def update_mtu(self):
+        """Fits HW_MTU to the interface MTU, which may have changed since
+        rtp last started. New links are negotiated with the new value."""
+        try:
+            mtu = interface_mtu(self.device)
+        except OSError:
+            return  # No interface yet: rtp will fail and report it.
+        payload = min(self.ETH_PAYLOAD, mtu - self.RTP_HEADER)
+        # Below Reticulum's base MTU nothing works; rtp refuses to start
+        # and explains why. Above it, give up the IFAC reserve if needed.
+        hw_mtu = max(payload - self.IFAC_RESERVE, RNS.Reticulum.MTU)
+        if hw_mtu != self.HW_MTU:
+            RNS.log(
+                f"{self} hardware MTU set to {hw_mtu} for an interface MTU of {mtu}",
+                RNS.LOG_NOTICE,
+            )
+            self.HW_MTU = hw_mtu
+
     def spawn(self):
+        self.update_mtu()
         ours, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         cmd = [self.binary, "--packet", self.device]
         if self.verbose:

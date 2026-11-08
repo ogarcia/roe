@@ -91,6 +91,11 @@ impl RawLink {
         unsafe { libc::if_nametoindex(self.name.as_ptr()) as i32 == self.ifindex }
     }
 
+    /// Current MTU of the interface: the largest Ethernet payload it sends.
+    pub fn mtu(&self) -> io::Result<usize> {
+        if_mtu(self.fd.as_raw_fd(), &self.name)
+    }
+
     /// False if the NIC could not be told to accept our group address.
     pub fn group_joined(&self) -> bool {
         self.group_joined
@@ -183,7 +188,7 @@ fn join_group(fd: libc::c_int, ifindex: i32, group: &Mac) -> io::Result<()> {
     Ok(())
 }
 
-fn hw_addr(fd: libc::c_int, cname: &CString) -> io::Result<Mac> {
+fn ifreq_for(cname: &CString) -> io::Result<libc::ifreq> {
     let mut req: libc::ifreq = unsafe { mem::zeroed() };
     let name = cname.as_bytes_with_nul();
     if name.len() > req.ifr_name.len() {
@@ -192,6 +197,17 @@ fn hw_addr(fd: libc::c_int, cname: &CString) -> io::Result<Mac> {
     for (dst, &src) in req.ifr_name.iter_mut().zip(name) {
         *dst = src as libc::c_char;
     }
+    Ok(req)
+}
+
+fn if_mtu(fd: libc::c_int, cname: &CString) -> io::Result<usize> {
+    let mut req = ifreq_for(cname)?;
+    cvt(unsafe { libc::ioctl(fd, libc::SIOCGIFMTU as _, &mut req) })?;
+    Ok(unsafe { req.ifr_ifru.ifru_mtu } as usize)
+}
+
+fn hw_addr(fd: libc::c_int, cname: &CString) -> io::Result<Mac> {
+    let mut req = ifreq_for(cname)?;
     cvt(unsafe { libc::ioctl(fd, libc::SIOCGIFHWADDR as _, &mut req) })?;
     let data = unsafe { req.ifr_ifru.ifru_hwaddr.sa_data };
     let mut mac = [0u8; MAC_LEN];
