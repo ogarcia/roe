@@ -52,14 +52,14 @@ directory it can write to. With systemd, the simplest is a state directory,
 └── storage/                    created and kept by Reticulum
 ```
 
-```sh
-sudo install -d /var/lib/reticulum/interfaces
-sudo ln -s /usr/share/roe/RoeInterface.py /var/lib/reticulum/interfaces/
-```
+Both units below create the link to `RoeInterface.py` themselves every time
+they start, so package updates reach it and nothing has to be prepared by
+hand. The path `/usr/share/roe/RoeInterface.py` is where the AUR package
+installs the module; adjust it to your installation.
 
-With the AUR package the module is at `/usr/share/roe/RoeInterface.py`;
-otherwise copy it from a bundle or from `dist-files/`. A link means package
-updates reach it. The interface in `config` is set up as usual:
+On its first start Reticulum writes a default `config`. Edit it to add the
+RoE interface, and to disable the interfaces you do not want (the default
+configuration enables `AutoInterface`), then restart the service:
 
 ```ini
 [interfaces]
@@ -85,8 +85,10 @@ After=network.target
 
 [Service]
 User=reticulum
-ExecStart=/usr/bin/rnsd --config /var/lib/reticulum
 StateDirectory=reticulum
+ExecStartPre=/usr/bin/mkdir -p %S/reticulum/interfaces
+ExecStartPre=/usr/bin/ln -sf /usr/share/roe/RoeInterface.py %S/reticulum/interfaces/RoeInterface.py
+ExecStart=/usr/bin/rnsd --config %S/reticulum
 Restart=on-failure
 RestartSec=5
 
@@ -100,7 +102,9 @@ Create the user first, for example with
 
 ## A hardened unit
 
-The same service, sandboxed. `NoNewPrivileges=yes` disables the file
+The same service, sandboxed, with a dynamic user: systemd allocates a
+transient user when the service starts, so there is no user to create.
+`DynamicUser=yes` implies `NoNewPrivileges=yes`, which disables the file
 capability, so `roe` gets `CAP_NET_RAW` as an ambient capability instead:
 
 ```ini
@@ -109,29 +113,36 @@ Description=Reticulum Network Stack daemon
 After=network.target
 
 [Service]
-User=reticulum
-ExecStart=/usr/bin/rnsd --config /var/lib/reticulum
+DynamicUser=yes
 StateDirectory=reticulum
+ExecStartPre=/usr/bin/mkdir -p %S/reticulum/interfaces
+ExecStartPre=/usr/bin/ln -sf /usr/share/roe/RoeInterface.py %S/reticulum/interfaces/RoeInterface.py
+ExecStart=/usr/bin/rnsd --config %S/reticulum
 Restart=on-failure
 RestartSec=5
 
 # CAP_NET_RAW for roe, inherited from rnsd; nothing else.
 AmbientCapabilities=CAP_NET_RAW
 CapabilityBoundingSet=CAP_NET_RAW
-NoNewPrivileges=yes
 
 # AF_PACKET for roe; AF_UNIX for the shared instance and for RoeInterface;
 # AF_INET and AF_INET6 only if other interfaces use IP. Other Reticulum
 # interfaces may need further families.
 RestrictAddressFamilies=AF_UNIX AF_PACKET AF_INET AF_INET6
 
-ProtectSystem=strict
 ProtectHome=yes
-PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+`DynamicUser=yes` also implies `ProtectSystem=strict` and `PrivateTmp=yes`,
+among other protections. The state is kept in `/var/lib/private/reticulum`,
+reachable as `/var/lib/reticulum` while the service runs, and survives
+restarts even though the user ID may change between them. Clients such as
+`rnstatus` or `rncp` reach the shared instance through an abstract Unix
+socket, which has no file permissions, so the dynamic user does not get in
+their way.
 
 The file capability on the binary does no harm here: the ambient
 capability takes over.
@@ -145,7 +156,7 @@ part of the test suite.
 | Setting | Effect on roe | What to do |
 |---|---|---|
 | `NoNewPrivileges=yes` | The file capability is ignored: `roe` cannot open its socket and keeps being restarted. | Use `AmbientCapabilities=CAP_NET_RAW`. |
-| Options that imply `NoNewPrivileges=` | Same as above. For a service that does not run as root, systemd enables `NoNewPrivileges=` implicitly when certain sandboxing options are set, such as `SystemCallFilter=`, `RestrictAddressFamilies=` or `MemoryDenyWriteExecute=` (see `systemd.exec(5)` for the full list). | Same as above. |
+| Options that imply `NoNewPrivileges=` | Same as above. For a service that does not run as root, systemd enables `NoNewPrivileges=` implicitly when certain sandboxing options are set, such as `DynamicUser=`, `SystemCallFilter=`, `RestrictAddressFamilies=` or `MemoryDenyWriteExecute=` (see `systemd.exec(5)` for the full list). | Same as above. |
 | `CapabilityBoundingSet=` without `CAP_NET_RAW` | `roe` cannot get the capability in any way. With a file capability, the kernel refuses to start it at all (`Operation not permitted`). | Include `CAP_NET_RAW`. |
 | `RestrictAddressFamilies=` without `AF_PACKET` | `roe` cannot create its socket. | Include `AF_PACKET` (and `AF_UNIX`). |
 | `PrivateNetwork=yes` | The service only sees a private loopback interface, not the real ones. | Do not use it. |
