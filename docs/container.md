@@ -5,15 +5,23 @@ The `Containerfile` builds an image with Reticulum (`rnsd` and its tools),
 
 ## Building
 
+The image does not compile `roe`: it takes a prebuilt static binary from
+`container/roe`. In CI that is the binary the build job produces and the
+tests use, the same one attached to each release. To build the image
+locally, put a static musl build there first:
+
 ```sh
+cargo build --release --target "$(uname -m)-unknown-linux-musl"
+cp "target/$(uname -m)-unknown-linux-musl/release/roe" container/roe
 podman build -t roe .
 ```
 
-The image is built for the architecture of the machine building it
-(x86_64 and aarch64 are both tested in CI). `roe` is compiled in a first
-stage into a static binary; the final image is based on `python:alpine`,
-with a pinned Reticulum version that can be changed with
-`--build-arg RNS_VERSION=...`.
+A binary downloaded from a release works too (`roe-x86_64-linux-musl` or
+`roe-aarch64-linux-musl`, renamed to `container/roe`). It must match the
+architecture of the image, which is that of the machine building it.
+
+The image is based on `python:alpine`, with a pinned Reticulum version that
+can be changed with `--build-arg RNS_VERSION=...`.
 
 ## Running
 

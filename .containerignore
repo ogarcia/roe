@@ -1,8 +1,5 @@
-# Only Cargo.toml, Cargo.lock, src/, dist-files/RoeInterface.py and
-# container/ are needed to build the image.
+# Only what the image needs: the prebuilt roe binary and entrypoint in
+# container/, and RoeInterface.py.
 *
-!Cargo.toml
-!Cargo.lock
-!src/
-!dist-files/RoeInterface.py
 !container/
+!dist-files/RoeInterface.py

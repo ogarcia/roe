@@ -129,6 +129,7 @@ jobs:
 
   container:
     name: Container (${{ matrix.arch }})
+    needs: build
     strategy:
       fail-fast: false
       matrix:
@@ -140,6 +141,12 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
+      # The image takes the binary built and tested by the build job.
+      - uses: actions/download-artifact@v8
+        with:
+          name: roe-${{ matrix.arch }}-linux-musl
+          path: container
+      - run: chmod 755 container/roe
       # Builds the image and runs two RoE nodes in containers. Rootful
       # podman: rootless networking gives no layer 2 access.
       - run: tests/container.sh

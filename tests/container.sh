@@ -6,6 +6,9 @@
 # checks the image end to end: the static roe binary, RoeInterface, the
 # entrypoint's generated config, and CAP_NET_RAW granted with --cap-add.
 #
+# The image takes a prebuilt roe from container/roe (CI puts its artifact
+# there); if it is missing, this script builds it.
+#
 # Needs root for the container engine (rootless networking gives no layer 2
 # access). Usage: [ENGINE="sudo podman"] [KEEP=1] tests/container.sh
 set -euo pipefail
@@ -25,9 +28,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if [[ ! -x "$ROOT/container/roe" ]]; then
+    echo "== Building roe (container/roe is missing)"
+    arch="$(uname -m)"
+    [[ "$arch" == arm64 ]] && arch=aarch64
+    cargo build --quiet --release --target "$arch-unknown-linux-musl" \
+        --manifest-path "$ROOT/Cargo.toml"
+    install -m 755 "$ROOT/target/$arch-unknown-linux-musl/release/roe" "$ROOT/container/roe"
+fi
+
 echo "== Building the image"
 "${ENGINE[@]}" build -q -t "$IMAGE" -f "$ROOT/Containerfile" "$ROOT" >/dev/null
-"${ENGINE[@]}" run --rm --entrypoint roe "$IMAGE" --help 2>&1 | head -n 1
+# roe --help prints its usage and exits with status 2.
+"${ENGINE[@]}" run --rm --entrypoint roe "$IMAGE" --help 2>&1 | head -n 1 || true
 "${ENGINE[@]}" run --rm --entrypoint rnsd "$IMAGE" --version
 
 cleanup

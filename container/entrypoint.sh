@@ -34,7 +34,7 @@ if [ ! -f "$CONFIG_DIR/config" ]; then
     type = RoeInterface
     interface_enabled = Yes
     device = ${ROE_DEVICE:-eth0}
-    binary = /usr/local/bin/roe
+    binary = /usr/bin/roe
 EOF
 fi
 

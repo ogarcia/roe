@@ -76,9 +76,11 @@ sudo setcap cap_net_raw+ep /usr/local/bin/roe
 ### Container
 
 The `Containerfile` builds an image with Reticulum, `roe` and
-`RoeInterface`:
+`RoeInterface`. It takes a prebuilt `roe` from `container/roe`:
 
 ```sh
+cargo build --release --target "$(uname -m)-unknown-linux-musl"
+cp "target/$(uname -m)-unknown-linux-musl/release/roe" container/roe
 podman build -t roe .
 podman run -d --name roe --network host --cap-add NET_RAW \
     -e ROE_DEVICE=eth0 -v roe-data:/data roe
