@@ -131,6 +131,14 @@ CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld \
 The tests need unprivileged user namespaces and a Python venv with
 Reticulum; see [docs/testing.md](docs/testing.md).
 
+To run the same format and lint checks as CI before every commit
+(rustfmt, clippy and, if installed, ruff), enable the repository hooks
+once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
 ## Documentation
 
 - [Motivation](docs/motivation.md): why Reticulum on Ethernet should not

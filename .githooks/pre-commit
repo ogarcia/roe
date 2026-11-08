@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Pre-commit hook: blocks commits whose code is not formatted or fails
+# clippy, and whose Python code fails ruff when ruff is installed. `cargo test` is intentionally NOT run here —
+# tests are CI's job; the hook keeps the local feedback loop fast.
+#
+# Activate once per clone:
+#   git config core.hooksPath .githooks
+
+set -euo pipefail
+
+if ! cargo fmt --all -- --check; then
+    echo
+    echo "✗ rustfmt found unformatted code. Run: cargo fmt --all" >&2
+    exit 1
+fi
+
+if ! cargo clippy --all-targets --all-features -- -D warnings; then
+    echo
+    echo "✗ clippy reported warnings. Fix them before committing." >&2
+    exit 1
+fi
+
+# ruff is optional locally (CI always runs it), so a machine without Python
+# tooling can still commit.
+if command -v ruff >/dev/null; then
+    mapfile -t py < <(git ls-files '*.py')
+    if (( ${#py[@]} )); then
+        if ! ruff check "${py[@]}" || ! ruff format --check "${py[@]}"; then
+            echo
+            echo "✗ ruff found problems. Run: ruff check --fix && ruff format" >&2
+            exit 1
+        fi
+    fi
+else
+    echo "ruff not found, skipping Python checks (CI will run them)" >&2
+fi

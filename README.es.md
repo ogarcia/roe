@@ -140,6 +140,14 @@ CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld \
 Los tests necesitan namespaces de usuario sin privilegios y un venv de
 Python con Reticulum; consulta [docs/testing.md](docs/testing.md).
 
+Para pasar antes de cada commit las mismas comprobaciones de formato y
+lint que el CI (rustfmt, clippy y, si está instalado, ruff), activa los
+hooks del repositorio una vez por clon:
+
+```sh
+git config core.hooksPath .githooks
+```
+
 ## Documentación
 
 La documentación detallada está en inglés:
