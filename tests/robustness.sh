@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Robustness test: two nodes over a veth pair (RtpInterface + rtp, no IP),
+# Robustness test: two nodes over a veth pair (RoeInterface + roe, no IP),
 # put through the failures a real deployment sees, checking after each one
 # that traffic recovers on its own.
 #
-#   1. the rtp helper is killed
+#   1. the roe helper is killed
 #   2. the interface is set administratively down and up again
 #   3. the carrier is lost and comes back (the peer end goes down: cable)
 #   4. the interface disappears and reappears with a new ifindex (USB NIC)
-#   5. rnsd dies: its rtp helper must not be left behind
+#   5. rnsd dies: its roe helper must not be left behind
 #
 # Usage: [KEEP=1] tests/robustness.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-if [[ "${RTP_IN_NS:-}" != 1 ]]; then
+if [[ "${ROE_IN_NS:-}" != 1 ]]; then
     cargo build --quiet --release --manifest-path "$ROOT/Cargo.toml"
-    exec env RTP_IN_NS=1 unshare --user --map-root-user --net -- "$0" "$@"
+    exec env ROE_IN_NS=1 unshare --user --map-root-user --net -- "$0" "$@"
 fi
 
-BIN="$ROOT/target/release/rtp"
+BIN="$ROOT/target/release/roe"
 VENV="$ROOT/.venv/bin"
 export PYTHONUNBUFFERED=1
 WORK="$(mktemp -d)"
@@ -48,12 +48,12 @@ make_link
 
 write_config() { # name port transport device
     mkdir -p "$WORK/$1/interfaces"
-    cp "$ROOT/dist-files/RtpInterface.py" "$WORK/$1/interfaces/"
+    cp "$ROOT/dist-files/RoeInterface.py" "$WORK/$1/interfaces/"
     cat > "$WORK/$1/config" <<EOF
 [reticulum]
   enable_transport = $3
   share_instance = Yes
-  instance_name = rtp-$1
+  instance_name = roe-$1
   shared_instance_port = $2
   instance_control_port = $(($2 + 1))
   respond_to_probes = Yes
@@ -63,7 +63,7 @@ write_config() { # name port transport device
 
 [interfaces]
   [[Ethernet]]
-    type = RtpInterface
+    type = RoeInterface
     interface_enabled = Yes
     device = $4
     binary = $BIN
@@ -86,7 +86,7 @@ done
 [[ -n "$PA" ]] || fail "node A did not start"
 sleep 2
 
-rtp_pid() { # device
+roe_pid() { # device
     pgrep -f -- "--packet $1\$" || true
 }
 
@@ -113,20 +113,20 @@ expect_unreachable() { # what
 }
 
 restarts() { # node
-    grep -c 'Restarted the rtp helper' "$WORK/$1.log" || true
+    grep -c 'Restarted the roe helper' "$WORK/$1.log" || true
 }
 
 echo "== 0. baseline"
 expect_reachable 10 "baseline"
 
-echo "== 1. rtp helper killed"
-old="$(rtp_pid a0)"
-[[ -n "$old" ]] || fail "no rtp helper running for a0"
+echo "== 1. roe helper killed"
+old="$(roe_pid a0)"
+[[ -n "$old" ]] || fail "no roe helper running for a0"
 kill -9 "$old"
-expect_reachable 20 "after killing rtp"
-new="$(rtp_pid a0)"
-[[ -n "$new" && "$new" != "$old" ]] || fail "rtp helper was not restarted"
-echo "  rtp restarted: pid $old -> $new"
+expect_reachable 20 "after killing roe"
+new="$(roe_pid a0)"
+[[ -n "$new" && "$new" != "$old" ]] || fail "roe helper was not restarted"
+echo "  roe restarted: pid $old -> $new"
 
 echo "== 2. interface set down and up"
 before="$(restarts a)"
@@ -136,8 +136,8 @@ expect_unreachable "a0 down"
 ip link set a0 up
 expect_reachable 20 "after a0 up"
 n=$(( $(restarts a) - before ))
-echo "  rtp restarts during the outage: $n"
-(( n == 0 )) || fail "rtp should ride out an interface that is only down"
+echo "  roe restarts during the outage: $n"
+(( n == 0 )) || fail "roe should ride out an interface that is only down"
 
 echo "== 3. carrier lost and back (peer end down)"
 before="$(restarts a)"
@@ -148,8 +148,8 @@ expect_unreachable "carrier lost"
 ip link set b0 up
 expect_reachable 20 "after carrier back"
 n=$(( $(restarts a) - before ))
-echo "  rtp restarts during the outage: $n"
-(( n == 0 )) || fail "rtp should ride out a carrier loss"
+echo "  roe restarts during the outage: $n"
+(( n == 0 )) || fail "roe should ride out a carrier loss"
 
 echo "== 4. interface removed and recreated"
 before="$(restarts a)"
@@ -161,20 +161,20 @@ new_idx="$(ip -o link show a0 | cut -d: -f1)"
 echo "  a0 ifindex $old_idx -> $new_idx"
 expect_reachable 30 "after recreating a0"
 n=$(( $(restarts a) - before ))
-echo "  rtp restarts: $n"
-(( n >= 1 )) || fail "rtp should restart to rebind the new interface"
+echo "  roe restarts: $n"
+(( n >= 1 )) || fail "roe should restart to rebind the new interface"
 
 echo "== 5. rnsd killed"
-helper="$(rtp_pid a0)"
-[[ -n "$helper" ]] || fail "no rtp helper running for a0"
+helper="$(roe_pid a0)"
+[[ -n "$helper" ]] || fail "no roe helper running for a0"
 kill -9 "${PID[a]}"; wait "${PID[a]}" 2>/dev/null || true
 unset 'PID[a]'
 for _ in $(seq 20); do
     kill -0 "$helper" 2>/dev/null || break
     sleep 0.1
 done
-kill -0 "$helper" 2>/dev/null && fail "rtp helper $helper outlived rnsd"
-echo "  rtp helper exited with rnsd"
+kill -0 "$helper" 2>/dev/null && fail "roe helper $helper outlived rnsd"
+echo "  roe helper exited with rnsd"
 
 echo
 echo "PASS"

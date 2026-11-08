@@ -18,7 +18,7 @@ On Ethernet, though, every built-in interface goes through IP:
 So on the medium where most Reticulum nodes actually live, the stack that
 claims independence from IP depends on the host's IP configuration after
 all. Classic LAN protocols such as IPX/SPX or AppleTalk did not: they had
-their own EtherType and sat directly on the link layer. `rtp` gives
+their own EtherType and sat directly on the link layer. `roe` gives
 Reticulum the same.
 
 ## What depending on IP costs in practice
@@ -30,19 +30,19 @@ does not need:
 - **It needs a working IP stack.** `AutoInterface` needs IPv6 enabled and a
   link-local address on the interface. Hosts with IPv6 disabled, or
   interfaces configured with `addrgenmode none`, cannot use it.
-- **It goes through the IP firewall.** While testing `rtp`, Reticulum's own
+- **It goes through the IP firewall.** While testing `roe`, Reticulum's own
   `AutoInterface` failed between two Arch Linux hosts because the default
   `nftables` rules dropped its UDP ports (`No multicast echoes received`).
-  `rtp` had worked between the same hosts from the first try. This cuts both
+  `roe` had worked between the same hosts from the first try. This cuts both
   ways; see [protocol.md](protocol.md#security-considerations).
 - **It exposes the node to the IP network.** A node reachable over UDP or
   TCP has the attack surface of an IP service. A node that only speaks
-  `rtp` has no IP surface at all on that interface.
+  `roe` has no IP surface at all on that interface.
 - **It adds overhead.** IPv6 and UDP headers take 48 bytes per packet, and
   every packet goes through the IP layer of both hosts. On fast Ethernet
   this matters less than the next point.
 - **Packet size is not chosen for the medium.** `AutoInterface` fixes its
-  hardware MTU at 1196 bytes. `rtp` uses 1432, close to the 1500-byte
+  hardware MTU at 1196 bytes. `roe` uses 1432, close to the 1500-byte
   Ethernet payload, and Reticulum's per-packet cost is high enough (it is
   written in Python, and every packet is encrypted) that fewer, larger
   packets are noticeably faster.
@@ -63,17 +63,17 @@ does not need:
 
 ## Non-goals
 
-- **Routing beyond the segment.** `rtp` is a link layer. Reaching other
+- **Routing beyond the segment.** `roe` is a link layer. Reaching other
   segments is the job of Reticulum transport nodes, which can forward
-  between `rtp` and any other interface.
+  between `roe` and any other interface.
 - **Replacing IP interfaces over the Internet.** TCP and Backbone
   interfaces remain the right tool to join nodes across routed networks.
 - **Unicast at layer 2.** All frames go to one group address. Reticulum
   packets carry no source address, so mapping destinations to MAC addresses
-  would mean `rtp` second-guessing Reticulum's routing. See
+  would mean `roe` second-guessing Reticulum's routing. See
   [protocol.md](protocol.md#addressing).
 - **Reliability at layer 2.** Like Ethernet itself and like every other
-  Reticulum interface, `rtp` is best effort. Reticulum provides proofs,
+  Reticulum interface, `roe` is best effort. Reticulum provides proofs,
   retransmission and ordering where they are needed.
 
 ## Results so far
@@ -82,9 +82,9 @@ Between two physical hosts on the same LAN, transferring 10 MB with `rncp`:
 
 | Transport | Throughput |
 |---|---|
-| `rtp` through Reticulum's `PipeInterface` (first version) | 12.1 Mbps |
+| `roe` through Reticulum's `PipeInterface` (first version) | 12.1 Mbps |
 | Reticulum's `AutoInterface` (UDP over IPv6 link-local) | 53.2 Mbps |
-| `rtp` through `RtpInterface` | **72.7 Mbps** |
+| `roe` through `RoeInterface` | **72.7 Mbps** |
 
 Multi-hop routing through a transport node, recovery from link failures and
 the aarch64 build are covered too. See [testing.md](testing.md) for the

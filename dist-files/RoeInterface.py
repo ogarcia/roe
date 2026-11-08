@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: MIT
 #
-# RtpInterface: Reticulum over raw Ethernet through the rtp helper.
+# RoeInterface: Reticulum over raw Ethernet through the roe helper.
 #
 # Copyright (c) 2026 Óscar García Amor
 #
-# Unlike the rest of the rtp project, which is GPL-3.0, this module is
+# Unlike the rest of the roe project, which is GPL-3.0, this module is
 # licensed under the MIT License, so that it can be combined with Reticulum
 # and distributed alongside it:
 #
@@ -31,7 +31,7 @@
 # Reticulum loads this file from the "interfaces" directory of its config
 # directory and runs it with `Interface` and `RNS` already in scope.
 #
-# The helper process `rtp --packet <device>` owns the raw socket, and is the
+# The helper process `roe --packet <device>` owns the raw socket, and is the
 # only part that needs CAP_NET_RAW. It talks to this interface over a
 # SOCK_SEQPACKET socket pair, where every message is exactly one packet, so
 # there is no framing to encode or decode on the Python side.
@@ -39,10 +39,10 @@
 # Example configuration:
 #
 #   [[Ethernet]]
-#     type = RtpInterface
+#     type = RoeInterface
 #     interface_enabled = Yes
 #     device = eth0
-#     binary = /path/to/rtp
+#     binary = /path/to/roe
 #     respawn_delay = 2
 
 import fcntl
@@ -64,12 +64,12 @@ def interface_mtu(device):
         return struct.unpack("16si20x", fcntl.ioctl(s, SIOCGIFMTU, ifreq))[1]
 
 
-class RtpInterface(Interface):
-    # Ethernet payload is 1500 bytes; rtp uses 4 for its own header. Leave
+class RoeInterface(Interface):
+    # Ethernet payload is 1500 bytes; roe uses 4 for its own header. Leave
     # room for the largest IFAC signature too, so any ifac_size fits. On
     # interfaces with a smaller MTU, update_mtu() lowers HW_MTU to match.
-    RTP_HEADER = 4
-    ETH_PAYLOAD = 1500 - RTP_HEADER
+    ROE_HEADER = 4
+    ETH_PAYLOAD = 1500 - ROE_HEADER
     IFAC_RESERVE = 64
     HW_MTU = ETH_PAYLOAD - IFAC_RESERVE
 
@@ -93,10 +93,10 @@ class RtpInterface(Interface):
 
         # Reticulum exec()s this module, so there is no __file__ to search
         # next to: take the binary from the config, or from PATH.
-        self.binary = c.get("binary") or shutil.which("rtp")
+        self.binary = c.get("binary") or shutil.which("roe")
         if not self.binary or not os.access(self.binary, os.X_OK):
             raise ValueError(
-                f"Cannot find the rtp binary for {self}, set 'binary' in its config"
+                f"Cannot find the roe binary for {self}, set 'binary' in its config"
             )
 
         self.respawn_delay = (
@@ -104,8 +104,8 @@ class RtpInterface(Interface):
         )
         self.verbose = c.as_bool("verbose") if "verbose" in c else False
 
-        self.HW_MTU = RtpInterface.HW_MTU
-        self.bitrate = RtpInterface.BITRATE_GUESS
+        self.HW_MTU = RoeInterface.HW_MTU
+        self.bitrate = RoeInterface.BITRATE_GUESS
         self.shared_medium = True
         self.process = None
         self.sock = None
@@ -116,13 +116,13 @@ class RtpInterface(Interface):
 
     def update_mtu(self):
         """Fits HW_MTU to the interface MTU, which may have changed since
-        rtp last started. New links are negotiated with the new value."""
+        roe last started. New links are negotiated with the new value."""
         try:
             mtu = interface_mtu(self.device)
         except OSError:
-            return  # No interface yet: rtp will fail and report it.
-        payload = min(self.ETH_PAYLOAD, mtu - self.RTP_HEADER)
-        # Below Reticulum's base MTU nothing works; rtp refuses to start
+            return  # No interface yet: roe will fail and report it.
+        payload = min(self.ETH_PAYLOAD, mtu - self.ROE_HEADER)
+        # Below Reticulum's base MTU nothing works; roe refuses to start
         # and explains why. Above it, give up the IFAC reserve if needed.
         hw_mtu = max(payload - self.IFAC_RESERVE, RNS.Reticulum.MTU)
         if hw_mtu != self.HW_MTU:
@@ -156,10 +156,10 @@ class RtpInterface(Interface):
                     if not data:
                         break
                     self.process_incoming(data)
-                RNS.log(f"The rtp helper for {self} exited", RNS.LOG_WARNING)
+                RNS.log(f"The roe helper for {self} exited", RNS.LOG_WARNING)
             except OSError as e:
                 RNS.log(
-                    f"Error reading from the rtp helper for {self}: {e}", RNS.LOG_ERROR
+                    f"Error reading from the roe helper for {self}: {e}", RNS.LOG_ERROR
                 )
 
             self.online = False
@@ -173,11 +173,11 @@ class RtpInterface(Interface):
             time.sleep(self.respawn_delay)
             try:
                 self.spawn()
-                RNS.log(f"Restarted the rtp helper for {self}")
+                RNS.log(f"Restarted the roe helper for {self}")
                 return
             except OSError as e:
                 RNS.log(
-                    f"Could not restart the rtp helper for {self}: {e}", RNS.LOG_ERROR
+                    f"Could not restart the roe helper for {self}: {e}", RNS.LOG_ERROR
                 )
 
     def reap(self):
@@ -188,7 +188,7 @@ class RtpInterface(Interface):
             try:
                 self.process.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                RNS.log(f"The rtp helper for {self} did not exit", RNS.LOG_WARNING)
+                RNS.log(f"The roe helper for {self} did not exit", RNS.LOG_WARNING)
 
     def process_incoming(self, data):
         self.rxb += len(data)
@@ -202,7 +202,7 @@ class RtpInterface(Interface):
             self.txb += len(data)
         except OSError as e:
             RNS.log(
-                f"Could not send through the rtp helper for {self}: {e}", RNS.LOG_ERROR
+                f"Could not send through the roe helper for {self}: {e}", RNS.LOG_ERROR
             )
 
     def detach(self):
@@ -211,7 +211,7 @@ class RtpInterface(Interface):
         self.reap()
 
     def __str__(self):
-        return f"RtpInterface[{self.name}]"
+        return f"RoeInterface[{self.name}]"
 
 
-interface_class = RtpInterface
+interface_class = RoeInterface

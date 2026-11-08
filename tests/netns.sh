@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end test: two rnsd instances talking only through `rtp` over a veth
+# End-to-end test: two rnsd instances talking only through `roe` over a veth
 # pair, inside an unprivileged user + network namespace with no IP at all.
 #
 # Usage: tests/netns.sh            (from the repository root)
@@ -7,12 +7,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-if [[ "${RTP_IN_NS:-}" != 1 ]]; then
+if [[ "${ROE_IN_NS:-}" != 1 ]]; then
     cargo build --quiet --manifest-path "$ROOT/Cargo.toml"
-    exec env RTP_IN_NS=1 unshare --user --map-root-user --net -- "$0" "$@"
+    exec env ROE_IN_NS=1 unshare --user --map-root-user --net -- "$0" "$@"
 fi
 
-BIN="$ROOT/target/debug/rtp"
+BIN="$ROOT/target/debug/roe"
 VENV="$ROOT/.venv/bin"
 export PYTHONUNBUFFERED=1
 WORK="$(mktemp -d)"
@@ -39,7 +39,7 @@ write_config() { # name iface port transport
 [reticulum]
   enable_transport = $4
   share_instance = Yes
-  instance_name = rtp-$1
+  instance_name = roe-$1
   shared_instance_port = $3
   instance_control_port = $(($3 + 1))
   respond_to_probes = Yes
@@ -80,7 +80,7 @@ ip -brief addr show
 status=0
 
 # veth delivers multicast regardless of membership, so check the NIC filter
-# explicitly: both ends must have joined the rtp group address.
+# explicitly: both ends must have joined the roe group address.
 for i in veth0 veth1; do
     if ip maddr show dev "$i" | grep -q '03:52:4e:53:00:01'; then
         echo "$i joined group 03:52:4e:53:00:01"
@@ -91,6 +91,6 @@ done
 
 "$VENV/rnprobe" --config "$WORK/b" -n 3 -t 15 rnstransport.probe "$probe" || status=$?
 
-echo "--- rtp on A ---"; grep '\[rtp\]' "$WORK/a.log" | head -n 8 || true
-echo "--- rtp on B ---"; grep '\[rtp\]' "$WORK/b.log" | head -n 8 || true
+echo "--- roe on A ---"; grep '\[roe\]' "$WORK/a.log" | head -n 8 || true
+echo "--- roe on B ---"; grep '\[roe\]' "$WORK/b.log" | head -n 8 || true
 exit "$status"

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# MTU test: rtp and RtpInterface on interfaces with an MTU below 1500.
+# MTU test: roe and RoeInterface on interfaces with an MTU below 1500.
 #
-#   1. Nodes start on a veth pair with MTU 1000: RtpInterface lowers its
+#   1. Nodes start on a veth pair with MTU 1000: RoeInterface lowers its
 #      hardware MTU, a file transfer works, and no frame exceeds the MTU.
-#   2. The MTU drops to 800 while running: rtp notices, is restarted, and
+#   2. The MTU drops to 800 while running: roe notices, is restarted, and
 #      transfers work again with the new value.
-#   3. With an MTU of 400, too small for Reticulum's 500-byte packets, rtp
+#   3. With an MTU of 400, too small for Reticulum's 500-byte packets, roe
 #      refuses to start and says why.
 #
 # Usage: [KEEP=1] tests/mtu.sh
@@ -13,12 +13,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-if [[ "${RTP_IN_NS:-}" != 1 ]]; then
+if [[ "${ROE_IN_NS:-}" != 1 ]]; then
     cargo build --quiet --release --manifest-path "$ROOT/Cargo.toml"
-    exec env RTP_IN_NS=1 unshare --user --map-root-user --net -- "$0" "$@"
+    exec env ROE_IN_NS=1 unshare --user --map-root-user --net -- "$0" "$@"
 fi
 
-BIN="$ROOT/target/release/rtp"
+BIN="$ROOT/target/release/roe"
 VENV="$ROOT/.venv/bin"
 export PYTHONUNBUFFERED=1
 WORK="$(mktemp -d)"
@@ -47,12 +47,12 @@ set_mtu 1000
 
 write_config() { # name port device
     mkdir -p "$WORK/$1/interfaces"
-    cp "$ROOT/dist-files/RtpInterface.py" "$WORK/$1/interfaces/"
+    cp "$ROOT/dist-files/RoeInterface.py" "$WORK/$1/interfaces/"
     cat > "$WORK/$1/config" <<EOF
 [reticulum]
   enable_transport = No
   share_instance = Yes
-  instance_name = rtp-$1
+  instance_name = roe-$1
   shared_instance_port = $2
   instance_control_port = $(($2 + 1))
 
@@ -61,7 +61,7 @@ write_config() { # name port device
 
 [interfaces]
   [[Ethernet]]
-    type = RtpInterface
+    type = RoeInterface
     interface_enabled = Yes
     device = $3
     binary = $BIN
@@ -88,7 +88,7 @@ done
 sleep 2
 
 # Sends a file from A to B, retrying a few times: right after an MTU change
-# the first attempt may be lost while rtp restarts.
+# the first attempt may be lost while roe restarts.
 send_file() { # name size-kb
     head -c "$(($2 * 1000))" /dev/urandom > "$WORK/$1"
     for attempt in 1 2 3; do
@@ -103,13 +103,13 @@ send_file() { # name size-kb
 }
 
 largest_tx() { # node
-    grep -oP '\[rtp\] tx \K\d+' "$WORK/$1.log" | sort -n | tail -n 1
+    grep -oP '\[roe\] tx \K\d+' "$WORK/$1.log" | sort -n | tail -n 1
 }
 
 echo "== 1. interface MTU 1000 from the start"
 grep -h 'hardware MTU set to' "$WORK/a.log" "$WORK/b.log" | sed 's/^/  /' | head -n 2
 grep -q 'hardware MTU set to 932 for an interface MTU of 1000' "$WORK/a.log" \
-    || fail "RtpInterface did not adapt to MTU 1000"
+    || fail "RoeInterface did not adapt to MTU 1000"
 send_file first.bin 500
 max="$(largest_tx a)"
 echo "  largest packet sent by A: $max bytes"
@@ -121,8 +121,8 @@ set_mtu 800
 send_file second.bin 500
 grep -h 'frame too large' "$WORK/a.log" "$WORK/b.log" | sed 's/^/  /' | head -n 2
 grep -q 'hardware MTU set to 732 for an interface MTU of 800' "$WORK/a.log" \
-    || fail "RtpInterface did not adapt to MTU 800"
-echo "  RtpInterface adapted to MTU 800"
+    || fail "RoeInterface did not adapt to MTU 800"
+echo "  RoeInterface adapted to MTU 800"
 
 echo "== 3. MTU too small for Reticulum"
 for p in "${PID[@]}"; do kill "$p" 2>/dev/null || true; done
@@ -130,10 +130,10 @@ wait 2>/dev/null || true
 PID=()
 set_mtu 400
 if out="$("$BIN" a0 </dev/null 2>&1)"; then
-    fail "rtp started on a 400-byte MTU"
+    fail "roe started on a 400-byte MTU"
 fi
 echo "$out" | sed 's/^/  /'
-[[ "$out" == *"too small"* ]] || fail "rtp did not explain why it refused to start"
+[[ "$out" == *"too small"* ]] || fail "roe did not explain why it refused to start"
 
 echo
 echo "PASS"

@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
 # Multi-hop test: two clients on separate Ethernet segments, joined only by a
-# transport node, all talking through RtpInterface + rtp with no IP.
+# transport node, all talking through RoeInterface + roe with no IP.
 #
 #   A ──veth── T ──veth── B
 #
 # A and B are plain clients (transport disabled). T is a transport node with
-# one RtpInterface per segment. The test checks that A finds a 2-hop path to
+# one RoeInterface per segment. The test checks that A finds a 2-hop path to
 # a destination on B via T, transfers a file across, and that A cannot reach
 # B any more once T is stopped.
 #
 # Reticulum only answers probes on transport nodes, so the target on B is
 # the destination of an `rncp --listen` running there.
 #
-# Usage: [SIZE_MB=n] [KEEP=1] [RTP_VERBOSE=1] tests/multihop.sh
+# Usage: [SIZE_MB=n] [KEEP=1] [ROE_VERBOSE=1] tests/multihop.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-if [[ "${RTP_IN_NS:-}" != 1 ]]; then
+if [[ "${ROE_IN_NS:-}" != 1 ]]; then
     cargo build --quiet --release --manifest-path "$ROOT/Cargo.toml"
-    exec env RTP_IN_NS=1 unshare --user --map-root-user --net -- "$0" "$@"
+    exec env ROE_IN_NS=1 unshare --user --map-root-user --net -- "$0" "$@"
 fi
 
-BIN="$ROOT/target/release/rtp"
+BIN="$ROOT/target/release/roe"
 VENV="$ROOT/.venv/bin"
 export PYTHONUNBUFFERED=1
 WORK="$(mktemp -d)"
@@ -47,15 +47,15 @@ for i in a0 t0 t1 b0; do
     ip link set "$i" up
 done
 
-rtp_iface() { # section-name device
+roe_iface() { # section-name device
     cat <<EOF
   [[$1]]
-    type = RtpInterface
+    type = RoeInterface
     interface_enabled = Yes
     device = $2
     binary = $BIN
     respawn_delay = 2
-    verbose = $([[ "${RTP_VERBOSE:-}" == 1 ]] && echo Yes || echo No)
+    verbose = $([[ "${ROE_VERBOSE:-}" == 1 ]] && echo Yes || echo No)
 EOF
 }
 
@@ -63,13 +63,13 @@ write_config() { # name port transport iface-blocks...
     local name=$1 port=$2 transport=$3
     shift 3
     mkdir -p "$WORK/$name/interfaces"
-    cp "$ROOT/dist-files/RtpInterface.py" "$WORK/$name/interfaces/"
+    cp "$ROOT/dist-files/RoeInterface.py" "$WORK/$name/interfaces/"
     {
         cat <<EOF
 [reticulum]
   enable_transport = $transport
   share_instance = Yes
-  instance_name = rtp-$name
+  instance_name = roe-$name
   shared_instance_port = $port
   instance_control_port = $((port + 1))
   respond_to_probes = Yes
@@ -83,9 +83,9 @@ EOF
     } > "$WORK/$name/config"
 }
 
-write_config a 47500 No  "$(rtp_iface Ethernet a0)"
-write_config t 47510 Yes "$(rtp_iface SegmentA t0)" "$(rtp_iface SegmentB t1)"
-write_config b 47520 No  "$(rtp_iface Ethernet b0)"
+write_config a 47500 No  "$(roe_iface Ethernet a0)"
+write_config t 47510 Yes "$(roe_iface SegmentA t0)" "$(roe_iface SegmentB t1)"
+write_config b 47520 No  "$(roe_iface Ethernet b0)"
 
 start_node() { # name
     "$VENV/rnsd" --config "$WORK/$1" > "$WORK/$1.log" 2>&1 &

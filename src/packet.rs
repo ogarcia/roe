@@ -1,7 +1,7 @@
 //! Packet-oriented upstream: a `SOCK_SEQPACKET` socket on stdin/stdout.
 //!
 //! Each message on the socket is exactly one Reticulum packet, so there is no
-//! framing to encode or decode. This is what `RtpInterface` uses.
+//! framing to encode or decode. This is what `RoeInterface` uses.
 
 use std::io;
 use std::mem;

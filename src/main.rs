@@ -5,19 +5,19 @@
 //! - HDLC (default): packets framed with simplified HDLC over stdin/stdout,
 //!   as Reticulum's built-in `PipeInterface` expects.
 //! - Packet (`--packet`): stdin/stdout is a `SOCK_SEQPACKET` socket and each
-//!   message is one packet, as used by the `RtpInterface` module.
+//!   message is one packet, as used by the `RoeInterface` module.
 
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::thread;
 
-use rtp::frame::{self, GROUP};
-use rtp::hdlc;
-use rtp::link::{self, RawLink};
-use rtp::packet;
+use reticulum_over_ethernet::frame::{self, GROUP};
+use reticulum_over_ethernet::hdlc;
+use reticulum_over_ethernet::link::{self, RawLink};
+use reticulum_over_ethernet::packet;
 
-const USAGE: &str = "usage: rtp [-v] [--packet] <interface>";
+const USAGE: &str = "usage: roe [-v] [--packet] <interface>";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Upstream {
@@ -49,7 +49,7 @@ fn parse_args() -> Result<Args, String> {
 }
 
 macro_rules! log {
-    ($($t:tt)*) => { eprintln!("[rtp] {}", format!($($t)*)) };
+    ($($t:tt)*) => { eprintln!("[roe] {}", format!($($t)*)) };
 }
 
 /// Ethernet -> upstream. Returns only on a fatal error.
@@ -128,7 +128,7 @@ impl<'a> Tx<'a> {
     /// While the interface is down, packets are dropped instead of failing:
     /// Reticulum already copes with loss. Packets larger than the interface
     /// MTU allows are dropped too. If the MTU shrinks while running, this
-    /// fails so that rtp exits and is restarted, letting RtpInterface adapt.
+    /// fails so that roe exits and is restarted, letting RoeInterface adapt.
     fn send(&mut self, payload: &[u8]) -> io::Result<()> {
         if payload.len() > self.limit {
             log!("dropped outbound packet: {} bytes exceeds {} (interface MTU)", payload.len(), self.limit);
@@ -245,7 +245,7 @@ fn main() -> ExitCode {
              which take an MTU of at least {}",
             args.ifname,
             frame::RETICULUM_MTU,
-            frame::RETICULUM_MTU + frame::RTP_HEADER_LEN
+            frame::RETICULUM_MTU + frame::ROE_HEADER_LEN
         );
         return ExitCode::FAILURE;
     }

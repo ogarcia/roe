@@ -1,8 +1,12 @@
 [package]
-name = "rtp"
+name = "reticulum-over-ethernet"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
+
+[[bin]]
+name = "roe"
+path = "src/main.rs"
 
 [dependencies]
 libc = "0.2.191"

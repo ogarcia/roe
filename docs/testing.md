@@ -29,9 +29,9 @@ work directory and logs with `KEEP=1`.
 | Test | What it checks |
 |---|---|
 | `cargo test` | Frame building and parsing, HDLC encoding and decoding, `SOCK_SEQPACKET` message boundaries and truncation. |
-| `tests/netns.sh` | Two `rnsd` instances on a veth pair with no IP address, `rtp` under `PipeInterface`; probe, and that both ends joined the group address. |
-| `tests/bundle.sh` | A packaged bundle, unpacked twice as if on two machines, each node in its own network namespace; probe and a file transfer. `MODE=rtp\|pipe\|udp` picks the interface, `SIZE_MB` the file size. |
-| `tests/multihop.sh` | Two clients on separate segments joined only by a transport node with two `RtpInterface`s: 2-hop path, file transfer, and no connectivity once the transport node stops. |
+| `tests/netns.sh` | Two `rnsd` instances on a veth pair with no IP address, `roe` under `PipeInterface`; probe, and that both ends joined the group address. |
+| `tests/bundle.sh` | A packaged bundle, unpacked twice as if on two machines, each node in its own network namespace; probe and a file transfer. `MODE=roe\|pipe\|udp` picks the interface, `SIZE_MB` the file size. |
+| `tests/multihop.sh` | Two clients on separate segments joined only by a transport node with two `RoeInterface`s: 2-hop path, file transfer, and no connectivity once the transport node stops. |
 | `tests/robustness.sh` | Recovery after the helper is killed, the interface goes down, the carrier is lost, the interface is removed and recreated; no orphan helper after `rnsd` dies. |
 | `tests/mtu.sh` | Interfaces with an MTU below 1500: hardware MTU adapted at start, no oversized frames, adaptation when the MTU drops while running, refusal to start below 504 bytes. |
 | `tests/qemu.sh` | `tests/bundle.sh` with the aarch64 build run under `qemu-aarch64-static`. |
@@ -53,16 +53,16 @@ Reticulum 1.6.0.
 
 | Transport | Throughput | Relative |
 |---|---|---|
-| `rtp` under `PipeInterface` | 12.1 Mbps | 1× |
+| `roe` under `PipeInterface` | 12.1 Mbps | 1× |
 | Reticulum's `AutoInterface` (UDP over IPv6 link-local) | 53.2 Mbps | 4.4× |
-| `rtp` under `RtpInterface` | **72.7 Mbps** | **6.0×** |
+| `roe` under `RoeInterface` | **72.7 Mbps** | **6.0×** |
 
-A packet capture during the `RtpInterface` transfer showed every frame sent
+A packet capture during the `RoeInterface` transfer showed every frame sent
 to `03:52:4e:53:00:01` with EtherType `0x88b5`, including the resource
 proofs coming back.
 
 `AutoInterface` needed the hosts' `nftables` rules to allow UDP ports 29716
-and 42671; `rtp` needed no firewall change.
+and 42671; `roe` needed no firewall change.
 
 ### Between network namespaces
 
@@ -71,10 +71,10 @@ Two nodes on a veth pair on one host (`tests/bundle.sh`):
 | Mode | Throughput | Total time |
 |---|---|---|
 | `pipe` | 25.0 Mbps | 4.2 s |
-| `rtp` | 88.8 Mbps | 1.9 s |
+| `roe` | 88.8 Mbps | 1.9 s |
 | `udp` | 88.8 Mbps | 1.9 s |
 
-`rtp` and `udp` give exactly the same figures, to the millisecond, across
+`roe` and `udp` give exactly the same figures, to the millisecond, across
 repeated runs. On a veth pair neither transport is the bottleneck: the
 transfer time is set by Reticulum and `rncp` themselves. Differences
 between them only show on real hardware.
@@ -95,13 +95,13 @@ Through a transport node, A → T → B (`tests/multihop.sh`):
 
 | Situation | Result |
 |---|---|
-| MTU 1000 from the start | `RtpInterface` hardware MTU 932; 500 kB transferred on the first attempt; largest packet 915 bytes; nothing dropped. |
-| MTU lowered to 800 while running | `rtp` exits on `EMSGSIZE` and restarts; hardware MTU 732; transfer succeeds on the second attempt. |
-| MTU 400 | `rtp` refuses to start: Reticulum needs an MTU of at least 504. |
+| MTU 1000 from the start | `RoeInterface` hardware MTU 932; 500 kB transferred on the first attempt; largest packet 915 bytes; nothing dropped. |
+| MTU lowered to 800 while running | `roe` exits on `EMSGSIZE` and restarts; hardware MTU 732; transfer succeeds on the second attempt. |
+| MTU 400 | `roe` refuses to start: Reticulum needs an MTU of at least 504. |
 
 ### aarch64 under qemu
 
-`tests/qemu.sh`: both nodes run the aarch64 `rtp` under
+`tests/qemu.sh`: both nodes run the aarch64 `roe` under
 `qemu-aarch64-static` on an x86_64 host. Probe without loss, 10 MB transfer
 at **79.9 Mbps**, file identical, despite the emulation.
 
@@ -109,16 +109,16 @@ at **79.9 Mbps**, file identical, despite the emulation.
 
 `tests/robustness.sh`, two nodes, `respawn_delay = 2`:
 
-| Event | rtp restarts | Traffic back after |
+| Event | `roe` restarts | Traffic back after |
 |---|---|---|
-| `rtp` killed with `SIGKILL` | 1 (expected) | ~4 s |
+| `roe` killed with `SIGKILL` | 1 (expected) | ~4 s |
 | Interface down for 3 s, then up | 0 | ~1 s |
 | Carrier lost (peer down), then back | 0 | ~1 s |
 | Interface removed and recreated (new index) | 2 (expected) | ~5 s |
-| `rnsd` killed with `SIGKILL` | `rtp` exits with it | n/a |
+| `rnsd` killed with `SIGKILL` | `roe` exits with it | n/a |
 
 Before the link-state handling was added, an interface going down made
-`rtp` restart every `respawn_delay` for the whole outage, and traffic took
+`roe` restart every `respawn_delay` for the whole outage, and traffic took
 up to `respawn_delay` to resume.
 
 ## Not covered yet

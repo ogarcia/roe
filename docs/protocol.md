@@ -1,13 +1,13 @@
 # Protocol
 
-This document specifies how `rtp` carries Reticulum packets over Ethernet
-(version 1 of the frame format), and the two local protocols between `rtp`
+This document specifies how `roe` carries Reticulum packets over Ethernet
+(version 1 of the frame format), and the two local protocols between `roe`
 and Reticulum.
 
 ## Overview
 
 Every Reticulum packet travels in exactly one Ethernet frame. There is no
-fragmentation, no acknowledgement and no state: `rtp` is a best-effort link
+fragmentation, no acknowledgement and no state: `roe` is a best-effort link
 layer, like Ethernet itself. Anything above that (proofs, retransmission,
 ordering, encryption) is Reticulum's job and works unchanged.
 
@@ -20,7 +20,7 @@ ordering, encryption) is Reticulum's job and works unchanged.
  +-------------------+-------------------+-------+---+---+-------+--------------
    03:52:4e:53:00:01   sender's NIC MAC   0x88B5  'R'  1   u16 BE
                                                   \______________/
-                                                     rtp header
+                                                     roe header
 ```
 
 All multi-byte fields are big-endian (network byte order).
@@ -66,7 +66,7 @@ A receiver:
 
 The payload is the Reticulum packet exactly as Reticulum hands it to any
 interface, including the IFAC field when the interface has an
-[Interface Access Code](#security-considerations) configured. `rtp` does not
+[Interface Access Code](#security-considerations) configured. `roe` does not
 look into it.
 
 ## Addressing
@@ -78,9 +78,9 @@ Every frame is sent to the group address `03:52:4e:53:00:01`:
   address, which no vendor will ever assign.
 - The next three octets spell `RNS` in ASCII.
 
-Each `rtp` instance joins this group on its interface
+Each `roe` instance joins this group on its interface
 (`PACKET_ADD_MEMBERSHIP`), which programs the NIC's multicast filter. Hosts
-that do not run `rtp` drop these frames in the NIC hardware, so they never
+that do not run `roe` drop these frames in the NIC hardware, so they never
 reach their kernel. Broadcast would interrupt every host on the segment for
 every Reticulum packet.
 
@@ -91,7 +91,7 @@ hosts, not in the switch.
 ### Why no unicast
 
 Reticulum is designed for shared media such as radio, where every node
-hears every packet, and its packets carry no source address. `rtp` presents
+hears every packet, and its packets carry no source address. `roe` presents
 the Ethernet segment to Reticulum in the same way: as one shared medium.
 
 Sending to individual MAC addresses would need a table from Reticulum
@@ -101,7 +101,7 @@ transport. On a switched LAN the bandwidth saved is not worth it.
 
 ### Receiving
 
-`rtp` binds a packet socket to its interface and to EtherType `0x88B5`. The
+`roe` binds a packet socket to its interface and to EtherType `0x88B5`. The
 kernel delivers every matching frame that the NIC accepts: the group
 address, broadcast, the interface's own unicast address, or anything at all
 in promiscuous mode. Receivers do not check the destination MAC.
@@ -111,17 +111,17 @@ Frames that the host itself transmitted are skipped (packet type
 
 ## MTU
 
-With a standard 1500-byte Ethernet payload and the 4-byte `rtp` header, a
+With a standard 1500-byte Ethernet payload and the 4-byte `roe` header, a
 frame can carry **1496 bytes** of Reticulum packet.
 
-`RtpInterface` declares a fixed hardware MTU of **1432 bytes**: 1496 minus
+`RoeInterface` declares a fixed hardware MTU of **1432 bytes**: 1496 minus
 64 bytes reserved for the largest possible IFAC field, so any IFAC size
 fits. Declaring the MTU as fixed (`FIXED_MTU`) lets Reticulum negotiate
 links with packets up to that size instead of its 500-byte default. In
 practice, link traffic is carried in packets of about 1415 bytes, once
 Reticulum rounds to its encryption block size.
 
-Reticulum's built-in `PipeInterface` does not declare a fixed MTU, so `rtp`
+Reticulum's built-in `PipeInterface` does not declare a fixed MTU, so `roe`
 under `PipeInterface` carries 500-byte packets.
 
 Jumbo frames are not used. Every node on the segment would need them
@@ -132,22 +132,22 @@ enabled, and a single node without them would silently lose large packets.
 On an interface with an MTU below 1500 bytes, the payload limit is the
 interface MTU minus the 4-byte header, and everything scales down with it:
 
-- `RtpInterface` reads the interface MTU each time it starts `rtp` and sets
+- `RoeInterface` reads the interface MTU each time it starts `roe` and sets
   its hardware MTU to that limit minus the 64-byte IFAC reserve (but never
   below Reticulum's 500 bytes). New links are negotiated accordingly.
-- `rtp` reads the MTU at startup and drops, with a log line, any packet
+- `roe` reads the MTU at startup and drops, with a log line, any packet
   that would not fit.
-- If the MTU shrinks while running, sending fails with `EMSGSIZE`. `rtp`
-  then exits, and the restart lets `RtpInterface` pick up the new MTU.
+- If the MTU shrinks while running, sending fails with `EMSGSIZE`. `roe`
+  then exits, and the restart lets `RoeInterface` pick up the new MTU.
 - Reticulum needs every interface to carry 500-byte packets, so an MTU
-  below 504 bytes cannot work: `rtp` refuses to start and says so.
+  below 504 bytes cannot work: `roe` refuses to start and says so.
 
-For example, on an interface with an MTU of 1000 bytes, `RtpInterface`
+For example, on an interface with an MTU of 1000 bytes, `RoeInterface`
 declares a hardware MTU of 932 bytes.
 
 ### VLANs
 
-`rtp` works on VLAN interfaces (`eth0.10` and the like) without changes:
+`roe` works on VLAN interfaces (`eth0.10` and the like) without changes:
 the kernel adds and removes the 802.1Q tag. If the VLAN interface has a
 smaller MTU, the previous section applies.
 
@@ -162,26 +162,26 @@ instead of the group address. They use the same version byte, but cannot
 receive from newer builds, because their NIC filter does not accept the
 group address. All nodes on a segment should run the same release.
 
-## Local protocols between rtp and Reticulum
+## Local protocols between roe and Reticulum
 
-`rtp` is a separate process that Reticulum starts and talks to through its
+`roe` is a separate process that Reticulum starts and talks to through its
 standard input and output. It supports two framings on that channel.
 
-### Packet mode (`rtp --packet <interface>`)
+### Packet mode (`roe --packet <interface>`)
 
-Used by `RtpInterface`. Standard input and standard output are both the
+Used by `RoeInterface`. Standard input and standard output are both the
 same `AF_UNIX`/`SOCK_SEQPACKET` socket, one end of a socket pair whose other
 end Reticulum keeps.
 
 - Each message on the socket is exactly one Reticulum packet, in either
   direction. There is no framing.
-- `rtp` checks at startup that its standard input is a `SOCK_SEQPACKET`
+- `roe` checks at startup that its standard input is a `SOCK_SEQPACKET`
   socket and refuses to run otherwise.
-- Packets longer than 1496 bytes are dropped and logged; `rtp` detects them
+- Packets longer than 1496 bytes are dropped and logged; `roe` detects them
   with `MSG_TRUNC`, so a truncated packet is never sent.
-- When Reticulum closes its end, `rtp` reads end-of-file and exits.
+- When Reticulum closes its end, `roe` reads end-of-file and exits.
 
-### HDLC mode (`rtp <interface>`)
+### HDLC mode (`roe <interface>`)
 
 Compatible with Reticulum's built-in `PipeInterface`, which exchanges
 packets over a pipe using simplified HDLC framing:
@@ -199,7 +199,7 @@ times slower than packet mode (see [testing.md](testing.md)).
 
 ## Security considerations
 
-- **Confidentiality and authenticity come from Reticulum.** `rtp` adds no
+- **Confidentiality and authenticity come from Reticulum.** `roe` adds no
   encryption or authentication. It does not need to: Reticulum encrypts
   traffic end to end and authenticates destinations by their keys. An
   observer on the segment sees the same thing a radio listener would.
@@ -207,21 +207,21 @@ times slower than packet mode (see [testing.md](testing.md)).
   frames. Reticulum's Interface Access Codes (`ifac_netname` and
   `ifac_netkey` in the interface configuration) make nodes drop packets
   that are not signed for their network.
-- **IP firewalls do not see `rtp`.** Packet sockets receive frames before
+- **IP firewalls do not see `roe`.** Packet sockets receive frames before
   the IP layer, so rules in the `ip`, `ip6` and `inet` families of
-  `nftables`, or in `iptables`, do not apply. To filter `rtp` traffic, use
+  `nftables`, or in `iptables`, do not apply. To filter `roe` traffic, use
   the `netdev` family on the interface, for example:
 
   ```sh
-  nft add table netdev rtpfilter
-  nft add chain netdev rtpfilter ingress \
+  nft add table netdev roefilter
+  nft add chain netdev roefilter ingress \
       '{ type filter hook ingress device "eth0" priority 0; }'
-  nft add rule netdev rtpfilter ingress ether type 0x88b5 drop
+  nft add rule netdev roefilter ingress ether type 0x88b5 drop
   ```
 
   On a Linux bridge, the `bridge` family can do the same for forwarded
   frames.
-- **Privilege is confined to `rtp`.** Opening a packet socket requires
-  `CAP_NET_RAW`. Only the `rtp` binary needs it; the Reticulum daemon runs
-  unprivileged and talks to `rtp` over a local socket. See
+- **Privilege is confined to `roe`.** Opening a packet socket requires
+  `CAP_NET_RAW`. Only the `roe` binary needs it; the Reticulum daemon runs
+  unprivileged and talks to `roe` over a local socket. See
   [architecture.md](architecture.md#privilege-model).

@@ -17,17 +17,17 @@ pub const VERSION: u8 = 0x01;
 
 pub const MAC_LEN: usize = 6;
 pub const ETH_HEADER_LEN: usize = 14;
-pub const RTP_HEADER_LEN: usize = 4;
-pub const HEADER_LEN: usize = ETH_HEADER_LEN + RTP_HEADER_LEN;
+pub const ROE_HEADER_LEN: usize = 4;
+pub const HEADER_LEN: usize = ETH_HEADER_LEN + ROE_HEADER_LEN;
 /// Standard Ethernet payload size, without jumbo frames.
 pub const ETH_MTU: usize = 1500;
-pub const MAX_PAYLOAD: usize = ETH_MTU - RTP_HEADER_LEN;
+pub const MAX_PAYLOAD: usize = ETH_MTU - ROE_HEADER_LEN;
 /// Reticulum's base MTU: every interface must carry packets of this size.
 pub const RETICULUM_MTU: usize = 500;
 
 /// Largest payload that fits an interface with the given MTU.
 pub fn max_payload_for(if_mtu: usize) -> usize {
-    if_mtu.saturating_sub(RTP_HEADER_LEN).min(MAX_PAYLOAD)
+    if_mtu.saturating_sub(ROE_HEADER_LEN).min(MAX_PAYLOAD)
 }
 
 /// Group address every node sends to and listens on.
@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn payload_limits() {
         let max = vec![0u8; MAX_PAYLOAD];
-        assert_eq!(build(&GROUP, &SRC, &max).unwrap().len(), HEADER_LEN + ETH_MTU - RTP_HEADER_LEN);
+        assert_eq!(build(&GROUP, &SRC, &max).unwrap().len(), HEADER_LEN + ETH_MTU - ROE_HEADER_LEN);
         let over = vec![0u8; MAX_PAYLOAD + 1];
         assert_eq!(build(&GROUP, &SRC, &over), Err(Error::TooLong(MAX_PAYLOAD + 1)));
     }
