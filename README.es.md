@@ -160,7 +160,8 @@ Y añade una interfaz a `~/.reticulum/config`:
 | `verbose` | `No` | Hace que `roe` registre cada trama que envía o recibe. |
 
 Las opciones estándar de las interfaces de Reticulum (`mode`,
-`ifac_netname`, `ifac_netkey`, `bitrate`...) funcionan como siempre.
+`network_name`, `passphrase`, `ifac_size`, `bitrate`...) funcionan como
+siempre.
 
 `roe` también puede funcionar con la `PipeInterface` integrada en
 Reticulum (`command = roe eth0`). Así no hace falta ningún módulo extra,

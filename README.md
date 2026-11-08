@@ -150,8 +150,8 @@ And add an interface to `~/.reticulum/config`:
 | `respawn_delay` | `5` | Seconds before restarting `roe` if it exits. |
 | `verbose` | `No` | Make `roe` log every frame it sends or receives. |
 
-Standard Reticulum interface options (`mode`, `ifac_netname`,
-`ifac_netkey`, `bitrate`, ...) work as usual.
+Standard Reticulum interface options (`mode`, `network_name`,
+`passphrase`, `ifac_size`, `bitrate`, ...) work as usual.
 
 `roe` can also run under Reticulum's built-in `PipeInterface`
 (`command = roe eth0`). That needs no extra module, but it is about six

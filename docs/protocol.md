@@ -204,9 +204,10 @@ times slower than packet mode (see [testing.md](testing.md)).
   traffic end to end and authenticates destinations by their keys. An
   observer on the segment sees the same thing a radio listener would.
 - **Use IFAC on shared segments.** Any host on the segment can inject
-  frames. Reticulum's Interface Access Codes (`ifac_netname` and
-  `ifac_netkey` in the interface configuration) make nodes drop packets
-  that are not signed for their network.
+  frames. Reticulum's Interface Access Codes (`network_name` and/or
+  `passphrase` in the interface configuration) make nodes drop packets
+  that are not signed for their network. Any `ifac_size` up to the maximum
+  of 512 bits fits in an RoE frame: `RoeInterface` reserves room for it.
 - **IP firewalls do not see `roe`.** Packet sockets receive frames before
   the IP layer, so rules in the `ip`, `ip6` and `inet` families of
   `nftables`, or in `iptables`, do not apply. To filter `roe` traffic, use
