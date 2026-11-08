@@ -1,4 +1,6 @@
-# rtp: Reticulum sobre Ethernet sin IP
+# rtp: Reticulum Transmission Protocol
+
+<p align="center"><a href="README.md">English</a> · <strong>Español</strong></p>
 
 Paquete de prueba para hacer hablar dos o más nodos Reticulum directamente
 sobre Ethernet (EtherType `0x88B5`), sin TCP/IP entre ellos.
@@ -20,6 +22,10 @@ tar xzf rtp-*.tar.gz && cd rtp-*/
 ./rtp-node setup               # instala Reticulum en ./.venv
 ./rtp-node start eth0          # arranca el nodo (se queda en primer plano)
 ```
+
+No descomprimas el paquete en `/tmp` ni en otro sistema de ficheros montado
+con `nosuid`: ahí se ignoran las capacidades de fichero y `rtp` no puede
+abrir la interfaz. `rtp-node` lo detecta y lo avisa.
 
 En otra terminal de la misma máquina:
 
@@ -55,13 +61,6 @@ que no ejecute `rtp` descarta estas tramas por hardware. Por eso todas las
 máquinas de la prueba deben usar la misma versión del paquete. Con
 `ip maddr show dev eth0` se ve si el nodo se ha suscrito al grupo.
 
-## Problemas conocidos
-
-- Por Wi-Fi puede no funcionar. Algunos puntos de acceso o drivers descartan
-  EtherTypes que no conocen.
-- `rtp` termina si no puede abrir la interfaz. `rnsd` lo reintenta cada 2 s,
-  así que en el log aparecerá el error repetido.
-
 ## Modos de interfaz
 
 `./rtp-node start eth0` usa `RtpInterface`, una interfaz de Reticulum
@@ -80,3 +79,10 @@ Para comparar rendimiento con la misma prueba de `send`:
 
 Con `RTP_VERBOSE=1 ./rtp-node start eth0`, `rtp` registra cada trama que
 envía o recibe.
+
+## Problemas conocidos
+
+- Por Wi-Fi puede no funcionar. Algunos puntos de acceso o drivers descartan
+  EtherTypes que no conocen.
+- `rtp` termina si no puede abrir la interfaz. `rnsd` lo reintenta cada 2 s,
+  así que en el log aparecerá el error repetido.
