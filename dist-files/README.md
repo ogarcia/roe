@@ -62,10 +62,21 @@ máquinas de la prueba deben usar la misma versión del paquete. Con
 - `rtp` termina si no puede abrir la interfaz. `rnsd` lo reintenta cada 2 s,
   así que en el log aparecerá el error repetido.
 
-## Comparar con UDP
+## Modos de interfaz
 
-`./rtp-node start --udp eth0` arranca el nodo con la `AutoInterface` de
-Reticulum (UDP sobre IPv6 link-local) en lugar de `rtp`, para comparar
-rendimiento con la misma prueba de `send`. Necesita que el cortafuegos deje
-pasar UDP en los puertos 29716 y 42671; `rtp` no lo necesita, porque trabaja
-por debajo de IP.
+`./rtp-node start eth0` usa `RtpInterface`, una interfaz de Reticulum
+incluida en el paquete que habla con `rtp` por un socket `SOCK_SEQPACKET`
+(un mensaje por paquete, sin entramado) y usa paquetes de hasta 1432 bytes.
+Es el modo normal.
+
+Para comparar rendimiento con la misma prueba de `send`:
+
+- `./rtp-node start --pipe eth0` usa la `PipeInterface` de Reticulum con
+  `rtp`. Es la primera versión: entramado HDLC y paquetes de 500 bytes.
+- `./rtp-node start --udp eth0` usa la `AutoInterface` de Reticulum (UDP
+  sobre IPv6 link-local), sin `rtp`. Necesita que el cortafuegos deje pasar
+  UDP en los puertos 29716 y 42671; `rtp` no lo necesita, porque trabaja por
+  debajo de IP.
+
+Con `RTP_VERBOSE=1 ./rtp-node start eth0`, `rtp` registra cada trama que
+envía o recibe.

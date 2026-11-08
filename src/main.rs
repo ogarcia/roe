@@ -1,5 +1,11 @@
-//! Bridge between Reticulum's `PipeInterface` (HDLC over stdin/stdout) and a
-//! raw Ethernet interface.
+//! Bridge between Reticulum and a raw Ethernet interface.
+//!
+//! Two upstream modes are supported:
+//!
+//! - HDLC (default): packets framed with simplified HDLC over stdin/stdout,
+//!   as Reticulum's built-in `PipeInterface` expects.
+//! - Packet (`--packet`): stdin/stdout is a `SOCK_SEQPACKET` socket and each
+//!   message is one packet, as used by the `RtpInterface` module.
 
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
@@ -9,35 +15,45 @@ use std::thread;
 use rtp::frame::{self, GROUP};
 use rtp::hdlc;
 use rtp::link::RawLink;
+use rtp::packet;
 
-const USAGE: &str = "usage: rtp [-v] <interface>";
+const USAGE: &str = "usage: rtp [-v] [--packet] <interface>";
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Upstream {
+    Hdlc,
+    Packet,
+}
 
 struct Args {
     ifname: String,
     verbose: bool,
+    upstream: Upstream,
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut ifname = None;
     let mut verbose = false;
+    let mut upstream = Upstream::Hdlc;
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "-v" | "--verbose" => verbose = true,
+            "--packet" => upstream = Upstream::Packet,
             "-h" | "--help" => return Err(USAGE.into()),
             s if s.starts_with('-') => return Err(format!("unknown option {s}\n{USAGE}")),
             s if ifname.is_none() => ifname = Some(s.to_owned()),
             _ => return Err(USAGE.into()),
         }
     }
-    Ok(Args { ifname: ifname.ok_or(USAGE)?, verbose })
+    Ok(Args { ifname: ifname.ok_or(USAGE)?, verbose, upstream })
 }
 
 macro_rules! log {
     ($($t:tt)*) => { eprintln!("[rtp] {}", format!($($t)*)) };
 }
 
-/// Ethernet -> stdout. Returns only on a fatal error.
-fn rx_loop(link: &RawLink, verbose: bool) -> io::Error {
+/// Ethernet -> upstream. Returns only on a fatal error.
+fn rx_loop(link: &RawLink, upstream: Upstream, verbose: bool) -> io::Error {
     let mut buf = vec![0u8; 2048];
     let mut out = Vec::with_capacity(4096);
     let mut stdout = io::stdout().lock();
@@ -58,16 +74,38 @@ fn rx_loop(link: &RawLink, verbose: bool) -> io::Error {
         if verbose {
             log!("rx {} bytes from {}", f.payload.len(), frame::fmt_mac(&f.src));
         }
-        out.clear();
-        hdlc::encode_into(f.payload, &mut out);
-        if let Err(e) = stdout.write_all(&out).and_then(|_| stdout.flush()) {
+        let res = match upstream {
+            Upstream::Packet => packet::send(packet::STDOUT, f.payload),
+            Upstream::Hdlc => {
+                out.clear();
+                hdlc::encode_into(f.payload, &mut out);
+                stdout.write_all(&out).and_then(|_| stdout.flush())
+            }
+        };
+        if let Err(e) = res {
             return e;
         }
     }
 }
 
-/// stdin -> Ethernet. Returns when stdin closes or on a fatal error.
-fn tx_loop(link: &RawLink, verbose: bool) -> io::Result<()> {
+/// Sends one packet from upstream as an Ethernet frame.
+fn transmit(link: &RawLink, src: &frame::Mac, payload: &[u8], verbose: bool) -> io::Result<()> {
+    let eth = match frame::build(&GROUP, src, payload) {
+        Ok(f) => f,
+        Err(e) => {
+            log!("dropped outbound packet: {e}");
+            return Ok(());
+        }
+    };
+    link.send(&eth)?;
+    if verbose {
+        log!("tx {} bytes", payload.len());
+    }
+    Ok(())
+}
+
+/// HDLC stdin -> Ethernet. Returns when stdin closes or on a fatal error.
+fn tx_loop_hdlc(link: &RawLink, verbose: bool) -> io::Result<()> {
     let src = link.mac();
     let mut dec = hdlc::Decoder::new(frame::MAX_PAYLOAD);
     let mut buf = [0u8; 4096];
@@ -80,19 +118,27 @@ fn tx_loop(link: &RawLink, verbose: bool) -> io::Result<()> {
             Err(e) => return Err(e),
         };
         for &b in &buf[..n] {
-            let Some(payload) = dec.push(b) else { continue };
-            let eth = match frame::build(&GROUP, &src, &payload) {
-                Ok(f) => f,
-                Err(e) => {
-                    log!("dropped outbound packet: {e}");
-                    continue;
-                }
-            };
-            link.send(&eth)?;
-            if verbose {
-                log!("tx {} bytes", payload.len());
+            if let Some(payload) = dec.push(b) {
+                transmit(link, &src, &payload, verbose)?;
             }
         }
+    }
+}
+
+/// Packet stdin -> Ethernet. Returns when the peer closes or on a fatal error.
+fn tx_loop_packet(link: &RawLink, verbose: bool) -> io::Result<()> {
+    let src = link.mac();
+    let mut buf = vec![0u8; frame::MAX_PAYLOAD + 1];
+    loop {
+        let n = packet::recv(packet::STDIN, &mut buf)?;
+        if n == 0 {
+            return Ok(());
+        }
+        if n > frame::MAX_PAYLOAD {
+            log!("dropped outbound packet: {n} bytes exceeds {}", frame::MAX_PAYLOAD);
+            continue;
+        }
+        transmit(link, &src, &buf[..n], verbose)?;
     }
 }
 
@@ -105,6 +151,13 @@ fn main() -> ExitCode {
         }
     };
 
+    if args.upstream == Upstream::Packet
+        && let Err(e) = packet::check_seqpacket(packet::STDIN)
+    {
+        log!("--packet needs stdin/stdout to be a SOCK_SEQPACKET socket: {e}");
+        return ExitCode::from(2);
+    }
+
     let link = match RawLink::open(&args.ifname) {
         Ok(l) => Arc::new(l),
         Err(e) => {
@@ -116,24 +169,32 @@ fn main() -> ExitCode {
         }
     };
     log!(
-        "up on {} (ifindex {}, mac {}, ethertype {:#06x})",
+        "up on {} (ifindex {}, mac {}, ethertype {:#06x}, {} upstream)",
         args.ifname,
         link.ifindex(),
         frame::fmt_mac(&link.mac()),
-        frame::ETHERTYPE
+        frame::ETHERTYPE,
+        match args.upstream {
+            Upstream::Hdlc => "hdlc",
+            Upstream::Packet => "packet",
+        }
     );
 
     let rx_link = Arc::clone(&link);
-    let verbose = args.verbose;
+    let (upstream, verbose) = (args.upstream, args.verbose);
     thread::spawn(move || {
-        let e = rx_loop(&rx_link, verbose);
+        let e = rx_loop(&rx_link, upstream, verbose);
         log!("receive loop failed: {e}");
         std::process::exit(1);
     });
 
-    match tx_loop(&link, args.verbose) {
+    let res = match args.upstream {
+        Upstream::Hdlc => tx_loop_hdlc(&link, args.verbose),
+        Upstream::Packet => tx_loop_packet(&link, args.verbose),
+    };
+    match res {
         Ok(()) => {
-            log!("stdin closed, exiting");
+            log!("upstream closed, exiting");
             ExitCode::SUCCESS
         }
         Err(e) => {

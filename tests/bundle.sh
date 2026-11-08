@@ -5,10 +5,12 @@
 # (joined only by a veth pair, without IP), probes one from the other and
 # transfers a 1 MB file. Needs Internet for 'rtp-node setup'.
 #
-# Usage: [MODE=udp] tests/bundle.sh [dist/rtp-<version>-x86_64.tar.gz]
+# Usage: [MODE=rtp|pipe|udp] [SIZE_MB=n] tests/bundle.sh [bundle.tar.gz]
 #
-# MODE=udp runs the same test over Reticulum's AutoInterface (UDP over IPv6
-# link-local) instead of rtp, as a performance baseline.
+# MODE picks the interface, to compare performance on the same test:
+#   rtp   RtpInterface + rtp (default)
+#   pipe  Reticulum's PipeInterface + rtp
+#   udp   Reticulum's AutoInterface (UDP over IPv6 link-local), no rtp
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -34,8 +36,12 @@ fi
 
 WORK="$1"
 MODE="${MODE:-rtp}"
-START_ARGS=()
-[[ "$MODE" == udp ]] && START_ARGS=(--udp)
+case "$MODE" in
+    rtp)  START_ARGS=() ;;
+    pipe) START_ARGS=(--pipe) ;;
+    udp)  START_ARGS=(--udp) ;;
+    *)    echo "unknown MODE: $MODE"; exit 2 ;;
+esac
 A="$(echo "$WORK"/a/rtp-*)"
 B="$(echo "$WORK"/b/rtp-*)"
 PIDS=()
@@ -52,7 +58,7 @@ inB() { nsenter -t "$NS" -n "$@"; }
 
 ip link add veth0 type veth peer name veth1
 ip link set veth1 netns "$NS"
-if [[ "$MODE" == rtp ]]; then
+if [[ "$MODE" != udp ]]; then
     # No IP at all, not even IPv6 link-local.
     ip link set veth0 addrgenmode none
     inB ip link set veth1 addrgenmode none
