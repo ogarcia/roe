@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    # Releases are tagged with the bare version: 0.1.0, 0.2.0, 0.2.1...
+    tags: ["[0-9]+.[0-9]+.[0-9]+*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RNS_VERSION: "1.6.0"
+
+jobs:
+  check:
+    name: Lint and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Check that the tag matches the crate version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version="$(cargo metadata --no-deps --format-version 1 \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')"
+          if [ "$GITHUB_REF_NAME" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+            exit 1
+          fi
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - uses: astral-sh/setup-uv@v10
+      - name: Ruff
+        run: |
+          mapfile -t py < <(git ls-files '*.py')
+          uvx ruff check "${py[@]}"
+          uvx ruff format --check "${py[@]}"
+
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.arch }}-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.arch }}
+      # pack.sh builds the static musl binary and the test bundle.
+      - run: scripts/pack.sh ${{ matrix.arch }}
+      - name: Collect binary
+        run: |
+          mkdir -p out
+          cp target/${{ matrix.arch }}-unknown-linux-musl/release/roe out/roe
+          file out/roe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: roe-${{ matrix.arch }}-linux-musl
+          path: out/roe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bundle-${{ matrix.arch }}
+          path: dist/roe-*-${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+  e2e:
+    name: End-to-end tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v10
+      - name: Allow unprivileged user namespaces
+        # Ubuntu restricts them through AppArmor; the tests rely on them to
+        # create network namespaces without root.
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Install qemu user-mode emulation
+        run: sudo apt-get update && sudo apt-get install -y qemu-user-static
+      - name: Install Reticulum
+        run: uv venv && uv pip install "rns==$RNS_VERSION"
+      - run: tests/netns.sh
+      - run: tests/bundle.sh
+      - run: tests/multihop.sh
+      - run: tests/robustness.sh
+      - run: tests/mtu.sh
+      - run: tests/qemu.sh
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [check, build, e2e]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - name: Prepare release files
+        run: |
+          mkdir release
+          for arch in x86_64 aarch64; do
+            cp "artifacts/roe-$arch-linux-musl/roe" "release/roe-$arch-linux-musl"
+            cp artifacts/bundle-$arch/*.tar.gz release/
+          done
+          cd release && sha256sum * > SHA256SUMS
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" release/*
+          --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
