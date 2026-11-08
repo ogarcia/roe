@@ -124,6 +124,8 @@ jobs:
       - run: tests/multihop.sh
       - run: tests/robustness.sh
       - run: tests/mtu.sh
+      - run: tests/ifac.sh
+      - run: tests/bridge.sh
 
   release:
     name: Release

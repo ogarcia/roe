@@ -34,6 +34,8 @@ work directory and logs with `KEEP=1`.
 | `tests/multihop.sh` | Two clients on separate segments joined only by a transport node with two `RoeInterface`s: 2-hop path, file transfer, and no connectivity once the transport node stops. |
 | `tests/robustness.sh` | Recovery after the helper is killed, the interface goes down, the carrier is lost, the interface is removed and recreated; no orphan helper after `rnsd` dies. |
 | `tests/mtu.sh` | Interfaces with an MTU below 1500: hardware MTU adapted at start, no oversized frames, adaptation when the MTU drops while running, refusal to start below 504 bytes. |
+| `tests/ifac.sh` | Three nodes on a bridged segment with the largest IFAC (64 bytes): nodes on the same IFAC network reach each other, a node with another key does not, and full-size packets plus the IFAC fit a frame. |
+| `tests/bridge.sh` | A transport node bridging RoE and TCP: a node with only RoE finds and exchanges files with a node with only TCP, 2 hops away. |
 | `tests/qemu.sh` | `tests/bundle.sh` with the aarch64 build run under qemu user-mode emulation, to test it locally without ARM hardware. |
 
 The tests use a veth pair because, unlike a real NIC, it delivers frames
@@ -49,7 +51,7 @@ request:
 - static musl builds for x86_64 and aarch64, uploaded as artifacts, both
   as bare binaries and as test bundles;
 - the end-to-end tests (`netns`, `bundle`, `multihop`, `robustness`,
-  `mtu`), natively on an x86_64 runner and on an arm64 runner. On arm64
+  `mtu`, `ifac`, `bridge`), natively on an x86_64 runner and on an arm64 runner. On arm64
   they run on a real aarch64 kernel, so unlike under qemu the group
   membership is set and checked.
 
@@ -114,6 +116,21 @@ Through a transport node, A → T → B (`tests/multihop.sh`):
 | MTU 1000 from the start | `RoeInterface` hardware MTU 932; 500 kB transferred on the first attempt; largest packet 915 bytes; nothing dropped. |
 | MTU lowered to 800 while running | `roe` exits on `EMSGSIZE` and restarts; hardware MTU 732; transfer succeeds on the second attempt. |
 | MTU 400 | `roe` refuses to start: Reticulum needs an MTU of at least 504. |
+
+### IFAC
+
+`tests/ifac.sh`, three nodes on a Linux bridge, `ifac_size = 512`:
+
+- A node on the same IFAC network: probe without loss.
+- A node with another passphrase: its path request times out.
+- 2 MB transfer: file identical; the largest packet on the wire is
+  1479 bytes, a 1415-byte link packet plus the 64-byte IFAC, within the
+  1496 bytes a frame carries; nothing dropped.
+
+### Bridging RoE and TCP
+
+`tests/bridge.sh`, A ─RoE─ T ─TCP─ B: A finds B's destination 2 hops away
+via T, and 2 MB files cross the bridge identical in both directions.
 
 ### aarch64 under qemu
 
