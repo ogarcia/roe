@@ -37,6 +37,10 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+      - name: Docs
+        run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
       - uses: astral-sh/setup-uv@v10.3.3
         with:
           # No Python lockfile to key a cache on: only ruff and a pinned rns.
