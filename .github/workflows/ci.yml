@@ -38,6 +38,9 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
       - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          # No Python lockfile to key a cache on: only ruff and a pinned rns.
+          enable-cache: false
       - name: Ruff
         run: |
           mapfile -t py < <(git ls-files '*.py')
@@ -78,21 +81,33 @@ jobs:
           if-no-files-found: error
 
   e2e:
-    name: End-to-end tests
-    runs-on: ubuntu-latest
+    name: End-to-end tests (${{ matrix.arch }})
+    # Native runners for each architecture: on arm64 this exercises the real
+    # kernel, including the multicast group membership that qemu user mode
+    # cannot set.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
+          targets: ${{ matrix.arch }}-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
       - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          # No Python lockfile to key a cache on: only ruff and a pinned rns.
+          enable-cache: false
       - name: Allow unprivileged user namespaces
         # Ubuntu restricts them through AppArmor; the tests rely on them to
         # create network namespaces without root.
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
-      - name: Install qemu user-mode emulation
-        run: sudo apt-get update && sudo apt-get install -y qemu-user-static
       - name: Install Reticulum
         run: uv venv && uv pip install "rns==$RNS_VERSION"
       - run: tests/netns.sh
@@ -100,7 +115,6 @@ jobs:
       - run: tests/multihop.sh
       - run: tests/robustness.sh
       - run: tests/mtu.sh
-      - run: tests/qemu.sh
 
   release:
     name: Release

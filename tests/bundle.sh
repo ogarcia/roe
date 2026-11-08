@@ -18,8 +18,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ "${ROE_IN_NS:-}" != 1 ]]; then
     tarball="${1:-}"
     if [[ -z "$tarball" ]]; then
-        "$ROOT/scripts/pack.sh" x86_64 >/dev/null
-        tarball="$(ls -t "$ROOT"/dist/roe-*-x86_64.tar.gz | head -n 1)"
+        arch="$(uname -m)"
+        [[ "$arch" == arm64 ]] && arch=aarch64
+        "$ROOT/scripts/pack.sh" "$arch" >/dev/null
+        tarball="$(ls -t "$ROOT"/dist/roe-*-"$arch".tar.gz | head -n 1)"
     fi
     tarball="$(readlink -f "$tarball")"
     work="$(mktemp -d)"

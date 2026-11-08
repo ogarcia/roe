@@ -155,12 +155,15 @@ re-established, and paths are re-learnt from announces.
 need their own backend in `src/link.rs`: BPF on macOS and the BSDs, Npcap
 on Windows. Android would need root.
 
-Static musl builds are produced for x86_64 and aarch64. The aarch64 build
-is tested under qemu user-mode emulation (see [testing.md](testing.md)).
-qemu user mode does not translate `SOL_PACKET` socket options, so the group
-membership cannot be set there; `roe` warns and carries on, which is
-harmless on the virtual interfaces the tests use. On real ARM hardware the
-membership works as on x86_64.
+Static musl builds are produced for x86_64 and aarch64. CI runs the whole
+end-to-end suite natively on both architectures (see
+[testing.md](testing.md#continuous-integration)).
+
+For local testing without ARM hardware, `tests/qemu.sh` runs the aarch64
+build under qemu user-mode emulation. qemu user mode does not translate
+`SOL_PACKET` socket options, so the group membership cannot be set there;
+`roe` warns and carries on, which is harmless on the virtual interfaces the
+tests use.
 
 ## The test bundle and roe-node
 
