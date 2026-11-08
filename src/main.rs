@@ -45,7 +45,11 @@ fn parse_args() -> Result<Args, String> {
             _ => return Err(USAGE.into()),
         }
     }
-    Ok(Args { ifname: ifname.ok_or(USAGE)?, verbose, upstream })
+    Ok(Args {
+        ifname: ifname.ok_or(USAGE)?,
+        verbose,
+        upstream,
+    })
 }
 
 macro_rules! log {
@@ -91,7 +95,11 @@ fn rx_loop(link: &RawLink, upstream: Upstream, verbose: bool) -> io::Error {
             }
         };
         if verbose {
-            log!("rx {} bytes from {}", f.payload.len(), frame::fmt_mac(&f.src));
+            log!(
+                "rx {} bytes from {}",
+                f.payload.len(),
+                frame::fmt_mac(&f.src)
+            );
         }
         let res = match upstream {
             Upstream::Packet => packet::send(packet::STDOUT, f.payload),
@@ -120,7 +128,13 @@ struct Tx<'a> {
 
 impl<'a> Tx<'a> {
     fn new(link: &'a RawLink, limit: usize, verbose: bool) -> Self {
-        Self { link, src: link.mac(), limit, dropping: false, verbose }
+        Self {
+            link,
+            src: link.mac(),
+            limit,
+            dropping: false,
+            verbose,
+        }
     }
 
     /// Sends one packet from upstream as an Ethernet frame.
@@ -131,7 +145,11 @@ impl<'a> Tx<'a> {
     /// fails so that roe exits and is restarted, letting RoeInterface adapt.
     fn send(&mut self, payload: &[u8]) -> io::Result<()> {
         if payload.len() > self.limit {
-            log!("dropped outbound packet: {} bytes exceeds {} (interface MTU)", payload.len(), self.limit);
+            log!(
+                "dropped outbound packet: {} bytes exceeds {} (interface MTU)",
+                payload.len(),
+                self.limit
+            );
             return Ok(());
         }
         let eth = match frame::build(&GROUP, &self.src, payload) {
@@ -156,7 +174,10 @@ impl<'a> Tx<'a> {
                 return Ok(());
             }
             Err(e) if e.raw_os_error() == Some(libc::EMSGSIZE) => {
-                let mtu = self.link.mtu().map_or_else(|e| format!("unknown ({e})"), |m| m.to_string());
+                let mtu = self
+                    .link
+                    .mtu()
+                    .map_or_else(|e| format!("unknown ({e})"), |m| m.to_string());
                 return Err(io::Error::other(format!(
                     "frame too large, interface MTU is now {mtu}; restarting to adapt"
                 )));
@@ -199,7 +220,10 @@ fn tx_loop_packet(mut tx: Tx) -> io::Result<()> {
             return Ok(());
         }
         if n > frame::MAX_PAYLOAD {
-            log!("dropped outbound packet: {n} bytes exceeds {}", frame::MAX_PAYLOAD);
+            log!(
+                "dropped outbound packet: {n} bytes exceeds {}",
+                frame::MAX_PAYLOAD
+            );
             continue;
         }
         tx.send(&buf[..n])?;

@@ -15,14 +15,26 @@ pub fn check_seqpacket(fd: RawFd) -> io::Result<()> {
     let mut ty: libc::c_int = 0;
     let mut len = mem::size_of::<libc::c_int>() as libc::socklen_t;
     let ret = unsafe {
-        libc::getsockopt(fd, libc::SOL_SOCKET, libc::SO_TYPE, (&mut ty as *mut libc::c_int).cast(), &mut len)
+        libc::getsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_TYPE,
+            (&mut ty as *mut libc::c_int).cast(),
+            &mut len,
+        )
     };
     if ret < 0 {
         let e = io::Error::last_os_error();
-        return Err(io::Error::new(e.kind(), format!("fd {fd} is not a socket: {e}")));
+        return Err(io::Error::new(
+            e.kind(),
+            format!("fd {fd} is not a socket: {e}"),
+        ));
     }
     if ty != libc::SOCK_SEQPACKET {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("fd {fd} is not a SOCK_SEQPACKET socket")));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("fd {fd} is not a SOCK_SEQPACKET socket"),
+        ));
     }
     Ok(())
 }
@@ -65,7 +77,10 @@ mod tests {
 
     fn pair(ty: libc::c_int) -> (OwnedFd, OwnedFd) {
         let mut fds = [0; 2];
-        assert_eq!(unsafe { libc::socketpair(libc::AF_UNIX, ty, 0, fds.as_mut_ptr()) }, 0);
+        assert_eq!(
+            unsafe { libc::socketpair(libc::AF_UNIX, ty, 0, fds.as_mut_ptr()) },
+            0
+        );
         unsafe { (OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])) }
     }
 

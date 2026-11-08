@@ -112,7 +112,10 @@ mod tests {
         stream.extend_from_slice(b"three");
         stream.push(FLAG);
         let frames = decode_all(&mut dec, &stream);
-        assert_eq!(frames, vec![b"one".to_vec(), b"two".to_vec(), b"three".to_vec()]);
+        assert_eq!(
+            frames,
+            vec![b"one".to_vec(), b"two".to_vec(), b"three".to_vec()]
+        );
     }
 
     #[test]

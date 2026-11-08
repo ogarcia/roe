@@ -58,8 +58,14 @@ impl std::fmt::Display for Error {
             Error::WrongEtherType(t) => write!(f, "unexpected EtherType {t:#06x}"),
             Error::WrongMagic(m) => write!(f, "unexpected magic byte {m:#04x}"),
             Error::UnsupportedVersion(v) => write!(f, "unsupported version {v}"),
-            Error::BadLength { declared, available } => {
-                write!(f, "declared length {declared} but only {available} bytes present")
+            Error::BadLength {
+                declared,
+                available,
+            } => {
+                write!(
+                    f,
+                    "declared length {declared} but only {available} bytes present"
+                )
             }
         }
     }
@@ -109,7 +115,10 @@ pub fn parse(buf: &[u8]) -> Result<Frame<'_>, Error> {
     let declared = u16::from_be_bytes([buf[16], buf[17]]) as usize;
     let available = buf.len() - HEADER_LEN;
     if declared > available {
-        return Err(Error::BadLength { declared, available });
+        return Err(Error::BadLength {
+            declared,
+            available,
+        });
     }
     Ok(Frame {
         dst: buf[0..6].try_into().unwrap(),
@@ -120,7 +129,10 @@ pub fn parse(buf: &[u8]) -> Result<Frame<'_>, Error> {
 
 /// Formats a MAC address as `aa:bb:cc:dd:ee:ff`.
 pub fn fmt_mac(mac: &Mac) -> String {
-    mac.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(":")
+    mac.iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<Vec<_>>()
+        .join(":")
 }
 
 #[cfg(test)]
@@ -133,7 +145,14 @@ mod tests {
     fn roundtrip() {
         let f = build(&GROUP, &SRC, b"hello").unwrap();
         let p = parse(&f).unwrap();
-        assert_eq!(p, Frame { dst: GROUP, src: SRC, payload: b"hello" });
+        assert_eq!(
+            p,
+            Frame {
+                dst: GROUP,
+                src: SRC,
+                payload: b"hello"
+            }
+        );
     }
 
     #[test]
@@ -161,7 +180,13 @@ mod tests {
 
         let mut f = good.clone();
         f[16..18].copy_from_slice(&100u16.to_be_bytes());
-        assert_eq!(parse(&f), Err(Error::BadLength { declared: 100, available: 1 }));
+        assert_eq!(
+            parse(&f),
+            Err(Error::BadLength {
+                declared: 100,
+                available: 1
+            })
+        );
 
         assert_eq!(parse(&good[..10]), Err(Error::Truncated));
     }
@@ -177,8 +202,14 @@ mod tests {
     #[test]
     fn payload_limits() {
         let max = vec![0u8; MAX_PAYLOAD];
-        assert_eq!(build(&GROUP, &SRC, &max).unwrap().len(), HEADER_LEN + ETH_MTU - ROE_HEADER_LEN);
+        assert_eq!(
+            build(&GROUP, &SRC, &max).unwrap().len(),
+            HEADER_LEN + ETH_MTU - ROE_HEADER_LEN
+        );
         let over = vec![0u8; MAX_PAYLOAD + 1];
-        assert_eq!(build(&GROUP, &SRC, &over), Err(Error::TooLong(MAX_PAYLOAD + 1)));
+        assert_eq!(
+            build(&GROUP, &SRC, &over),
+            Err(Error::TooLong(MAX_PAYLOAD + 1))
+        );
     }
 }
