@@ -36,6 +36,7 @@ work directory and logs with `KEEP=1`.
 | `tests/mtu.sh` | Interfaces with an MTU below 1500: hardware MTU adapted at start, no oversized frames, adaptation when the MTU drops while running, refusal to start below 504 bytes. |
 | `tests/ifac.sh` | Three nodes on a bridged segment with the largest IFAC (64 bytes): nodes on the same IFAC network reach each other, a node with another key does not, and full-size packets plus the IFAC fit a frame. |
 | `tests/bridge.sh` | A transport node bridging RoE and TCP: a node with only RoE finds and exchanges files with a node with only TCP, 2 hops away. |
+| `tests/container.sh` | Builds the container image and runs two nodes in containers on a bridge network; one probes the other over RoE. Needs a root container engine (`ENGINE="sudo podman"`). |
 | `tests/qemu.sh` | `tests/bundle.sh` with the aarch64 build run under qemu user-mode emulation, to test it locally without ARM hardware. |
 
 The tests use a veth pair because, unlike a real NIC, it delivers frames
@@ -54,6 +55,9 @@ request:
   `mtu`, `ifac`, `bridge`), natively on an x86_64 runner and on an arm64 runner. On arm64
   they run on a real aarch64 kernel, so unlike under qemu the group
   membership is set and checked.
+
+A separate job builds the container image and runs `tests/container.sh`,
+also on both architectures.
 
 `tests/qemu.sh` is not run in CI, since the arm64 runner covers the same
 ground natively.

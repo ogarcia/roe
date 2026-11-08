@@ -73,6 +73,19 @@ sudo setcap cap_net_raw+ep /usr/local/bin/roe
 
 `RoeInterface.py` is included in the bundles of the same release.
 
+### Container
+
+The `Containerfile` builds an image with Reticulum, `roe` and
+`RoeInterface`:
+
+```sh
+podman build -t roe .
+podman run -d --name roe --network host --cap-add NET_RAW \
+    -e ROE_DEVICE=eth0 -v roe-data:/data roe
+```
+
+See [docs/container.md](docs/container.md).
+
 ### From source
 
 ```sh
@@ -200,3 +213,5 @@ git config core.hooksPath .githooks
 - [Testing](docs/testing.md): test suite and measured results.
 - [Running as a service](docs/deployment.md): systemd units, and how `roe`
   gets `CAP_NET_RAW` under sandboxing.
+- [Container](docs/container.md): building and running the container
+  image.

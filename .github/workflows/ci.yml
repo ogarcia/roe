@@ -127,6 +127,25 @@ jobs:
       - run: tests/ifac.sh
       - run: tests/bridge.sh
 
+  container:
+    name: Container (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-26.04
+          - arch: aarch64
+            runner: ubuntu-26.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      # Builds the image and runs two RoE nodes in containers. Rootful
+      # podman: rootless networking gives no layer 2 access.
+      - run: tests/container.sh
+        env:
+          ENGINE: sudo podman
+
   release:
     name: Release
     if: startsWith(github.ref, 'refs/tags/')

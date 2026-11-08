@@ -81,6 +81,19 @@ sudo setcap cap_net_raw+ep /usr/local/bin/roe
 
 `RoeInterface.py` va incluido en los paquetes de prueba de la misma release.
 
+### Contenedor
+
+El `Containerfile` construye una imagen con Reticulum, `roe` y
+`RoeInterface`:
+
+```sh
+podman build -t roe .
+podman run -d --name roe --network host --cap-add NET_RAW \
+    -e ROE_DEVICE=eth0 -v roe-data:/data roe
+```
+
+Consulta [docs/container.md](docs/container.md) (en inglés).
+
 ### Desde el código fuente
 
 ```sh
@@ -214,3 +227,5 @@ La documentación detallada está en inglés:
 - [Testing](docs/testing.md): batería de tests y resultados medidos.
 - [Running as a service](docs/deployment.md): unidades de systemd, y cómo
   obtiene `roe` `CAP_NET_RAW` cuando el servicio está aislado.
+- [Container](docs/container.md): cómo construir y ejecutar la imagen de
+  contenedor.
