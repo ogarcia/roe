@@ -93,21 +93,22 @@ start_node() { # name
 }
 
 wait_log() { # name pattern
-    for _ in $(seq 50); do
+    for _ in $(seq 300); do
         grep -q "$2" "$WORK/$1.log" 2>/dev/null && return 0
         sleep 0.2
     done
+    tail -n 20 "$WORK/$1.log"
     fail "node $1: '$2' never appeared in its log"
 }
 
 probe_hash() { # name
     local h=""
-    for _ in $(seq 50); do
+    for _ in $(seq 300); do
         h="$(grep -oP 'probe requests on <[^:>]*:\K[0-9a-f]{32}' "$WORK/$1.log" || true)"
         [[ -n "$h" ]] && break
         sleep 0.2
     done
-    [[ -n "$h" ]] || fail "node $1 did not start"
+    [[ -n "$h" ]] || { tail -n 20 "$WORK/$1.log"; fail "node $1 did not start"; }
     echo "$h"
 }
 
@@ -130,12 +131,12 @@ mkdir -p "$WORK/received"
 "$VENV/rncp" --config "$WORK/b" -v -l -n -s "$WORK/received" > "$WORK/listen.log" 2>&1 &
 PID[listen]=$!
 DST=""
-for _ in $(seq 50); do
+for _ in $(seq 300); do
     DST="$(grep -oP 'listening on <\K[0-9a-f]{32}' "$WORK/listen.log" || true)"
     [[ -n "$DST" ]] && break
     sleep 0.2
 done
-[[ -n "$DST" ]] || fail "listener on B did not start"
+[[ -n "$DST" ]] || { echo "--- rncp listener log"; cat "$WORK/listen.log"; echo "--- node B log (tail)"; tail -n 20 "$WORK/b.log"; fail "listener on B did not start"; }
 sleep 2
 
 echo

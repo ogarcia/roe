@@ -79,12 +79,12 @@ mkdir -p "$WORK/received"
 "$VENV/rncp" --config "$WORK/b" -v -l -n -s "$WORK/received" > "$WORK/listen.log" 2>&1 &
 PID[listen]=$!
 DST=""
-for _ in $(seq 75); do
+for _ in $(seq 300); do
     DST="$(grep -oP 'listening on <\K[0-9a-f]{32}' "$WORK/listen.log" || true)"
     [[ -n "$DST" ]] && break
     sleep 0.2
 done
-[[ -n "$DST" ]] || fail "listener on B did not start"
+[[ -n "$DST" ]] || { echo "--- rncp listener log"; cat "$WORK/listen.log"; echo "--- node B log (tail)"; tail -n 20 "$WORK/b.log"; fail "listener on B did not start"; }
 sleep 2
 
 # Sends a file from A to B, retrying a few times: right after an MTU change

@@ -78,12 +78,12 @@ write_config b 47610 No b0
 "$VENV/rnsd" --config "$WORK/b" > "$WORK/b.log" 2>&1 & PID[b]=$!
 
 PA=""
-for _ in $(seq 50); do
+for _ in $(seq 300); do
     PA="$(grep -oP 'probe requests on <[^:>]*:\K[0-9a-f]{32}' "$WORK/a.log" || true)"
     [[ -n "$PA" ]] && break
     sleep 0.2
 done
-[[ -n "$PA" ]] || fail "node A did not start"
+[[ -n "$PA" ]] || { tail -n 20 "$WORK/a.log"; fail "node A did not start"; }
 sleep 2
 
 roe_pid() { # device

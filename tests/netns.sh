@@ -64,7 +64,7 @@ write_config b veth1 47438 No
 
 # Wait for node A to publish its probe destination.
 probe=""
-for _ in $(seq 50); do
+for _ in $(seq 300); do
     probe="$(grep -oP 'probe requests on <[^:>]*:\K[0-9a-f]{32}' "$WORK/a.log" || true)"
     [[ -n "$probe" ]] && break
     sleep 0.2

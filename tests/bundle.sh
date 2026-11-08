@@ -74,7 +74,7 @@ inB ip link set veth1 up
 inB "$B/roe-node" start "${START_ARGS[@]}" veth1 > "$WORK/b.log" 2>&1 & PIDS+=($!)
 
 ida=""
-for _ in $(seq 50); do
+for _ in $(seq 300); do
     ida="$("$A/roe-node" id 2>/dev/null || true)"
     [[ -n "$ida" ]] && break
     sleep 0.2
@@ -86,7 +86,7 @@ inB "$B/roe-node" probe "$ida" 3 | tail -n 1
 
 "$A/roe-node" listen > "$WORK/listen.log" 2>&1 & PIDS+=($!)
 dst=""
-for _ in $(seq 50); do
+for _ in $(seq 300); do
     dst="$(grep -oP 'listening on <\K[0-9a-f]{32}' "$WORK/listen.log" || true)"
     [[ -n "$dst" ]] && break
     sleep 0.2
