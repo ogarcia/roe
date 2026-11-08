@@ -3,6 +3,14 @@ name = "reticulum-over-ethernet"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
+description = "Reticulum over Ethernet: carries Reticulum packets directly in Ethernet frames, without IP"
+repository = "https://github.com/ogarcia/roe"
+readme = "README.md"
+keywords = ["reticulum", "ethernet", "mesh", "networking", "raw-socket"]
+categories = ["network-programming", "command-line-utilities"]
+# Only what the crate needs: the bundle files (including the MIT-licensed
+# RoeInterface.py), scripts and end-to-end tests stay in the repository.
+include = ["/src/**/*.rs", "/README.md", "/README.es.md", "/docs/*.md", "/LICENSE"]
 
 [[bin]]
 name = "roe"
