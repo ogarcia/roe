@@ -33,6 +33,7 @@ work directory and logs with `KEEP=1`.
 | `tests/bundle.sh` | A packaged bundle, unpacked twice as if on two machines, each node in its own network namespace; probe and a file transfer. `MODE=rtp\|pipe\|udp` picks the interface, `SIZE_MB` the file size. |
 | `tests/multihop.sh` | Two clients on separate segments joined only by a transport node with two `RtpInterface`s: 2-hop path, file transfer, and no connectivity once the transport node stops. |
 | `tests/robustness.sh` | Recovery after the helper is killed, the interface goes down, the carrier is lost, the interface is removed and recreated; no orphan helper after `rnsd` dies. |
+| `tests/mtu.sh` | Interfaces with an MTU below 1500: hardware MTU adapted at start, no oversized frames, adaptation when the MTU drops while running, refusal to start below 504 bytes. |
 | `tests/qemu.sh` | `tests/bundle.sh` with the aarch64 build run under `qemu-aarch64-static`. |
 
 The tests use a veth pair because, unlike a real NIC, it delivers frames
@@ -88,6 +89,16 @@ Through a transport node, A → T → B (`tests/multihop.sh`):
   link MTU holds across the transport node.
 - With T stopped, A cannot establish a link to B.
 
+### Smaller MTU
+
+`tests/mtu.sh`, two nodes on a veth pair:
+
+| Situation | Result |
+|---|---|
+| MTU 1000 from the start | `RtpInterface` hardware MTU 932; 500 kB transferred on the first attempt; largest packet 915 bytes; nothing dropped. |
+| MTU lowered to 800 while running | `rtp` exits on `EMSGSIZE` and restarts; hardware MTU 732; transfer succeeds on the second attempt. |
+| MTU 400 | `rtp` refuses to start: Reticulum needs an MTU of at least 504. |
+
 ### aarch64 under qemu
 
 `tests/qemu.sh`: both nodes run the aarch64 `rtp` under
@@ -116,7 +127,5 @@ up to `respawn_delay` to resume.
   do not know. Untested.
 - **Real ARM hardware.** The aarch64 build is only tested under emulation,
   where the group membership cannot be set.
-- **Interfaces with an MTU below 1500 bytes.** See
-  [protocol.md](protocol.md#interfaces-with-a-smaller-mtu).
 - **Larger segments.** All tests use two or three nodes.
 - **Repeated measurements.** Each figure above comes from a single run.

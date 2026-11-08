@@ -45,7 +45,9 @@ At startup it:
    interface;
 3. joins the `rtp` group address on the interface (`PACKET_ADD_MEMBERSHIP`);
 4. sets a one-second receive timeout (see [failure handling](#failure-handling));
-5. reads the interface's MAC address, used as the source of every frame.
+5. reads the interface's MAC address, used as the source of every frame;
+6. reads the interface MTU, which sets the largest packet it will send
+   ([protocol.md](protocol.md#interfaces-with-a-smaller-mtu)).
 
 Then it runs two loops:
 
@@ -94,7 +96,7 @@ It also tells Reticulum about the medium:
 
 | Attribute | Value | Effect |
 |---|---|---|
-| `HW_MTU` | 1432 | Largest packet `rtp` can carry with any IFAC size. |
+| `HW_MTU` | 1432 | Largest packet `rtp` can carry with any IFAC size; lower on interfaces with a smaller MTU, re-read on every `rtp` start. |
 | `FIXED_MTU` | `True` | Lets Reticulum negotiate links up to `HW_MTU`. |
 | `bitrate` | 100 Mbps | Estimate used for Reticulum's timeouts; override with `bitrate`. |
 | `shared_medium` | `True` | Every node on the segment hears every packet. |
@@ -132,6 +134,7 @@ systemd units). `rtp-node` checks for both and explains the problem.
 | Interface set down | `rtp` keeps its socket, drops outgoing packets and logs the outage once. Traffic resumes as soon as the interface is up, without a restart. |
 | Carrier lost (cable unplugged) | Frames are silently lost, as on any Ethernet. Traffic resumes when the carrier comes back. |
 | Interface removed (USB NIC unplugged) | `rtp` notices within a second that the name no longer maps to the index it is bound to, and exits. `RtpInterface` restarts it until the interface exists again, then traffic resumes on the new interface. |
+| Interface MTU shrinks | Sending fails with `EMSGSIZE`; `rtp` exits, and on restart `RtpInterface` lowers its hardware MTU to match. |
 | `rnsd` exits or crashes | Its end of the socket pair closes; `rtp` reads end-of-file and exits. No orphan is left behind. |
 
 Two details make this work:

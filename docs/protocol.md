@@ -129,16 +129,27 @@ enabled, and a single node without them would silently lose large packets.
 
 ### Interfaces with a smaller MTU
 
-`rtp` assumes the interface MTU is at least 1500 bytes and does not check
-it. On an interface with a smaller MTU, sending a large packet fails with
-`EMSGSIZE`, which `rtp` currently treats as fatal: it exits and keeps being
-restarted. This is a known limitation.
+On an interface with an MTU below 1500 bytes, the payload limit is the
+interface MTU minus the 4-byte header, and everything scales down with it:
+
+- `RtpInterface` reads the interface MTU each time it starts `rtp` and sets
+  its hardware MTU to that limit minus the 64-byte IFAC reserve (but never
+  below Reticulum's 500 bytes). New links are negotiated accordingly.
+- `rtp` reads the MTU at startup and drops, with a log line, any packet
+  that would not fit.
+- If the MTU shrinks while running, sending fails with `EMSGSIZE`. `rtp`
+  then exits, and the restart lets `RtpInterface` pick up the new MTU.
+- Reticulum needs every interface to carry 500-byte packets, so an MTU
+  below 504 bytes cannot work: `rtp` refuses to start and says so.
+
+For example, on an interface with an MTU of 1000 bytes, `RtpInterface`
+declares a hardware MTU of 932 bytes.
 
 ### VLANs
 
 `rtp` works on VLAN interfaces (`eth0.10` and the like) without changes:
-the kernel adds and removes the 802.1Q tag. Most NICs keep a 1500-byte MTU
-on VLAN interfaces; see the previous section if yours does not.
+the kernel adds and removes the 802.1Q tag. If the VLAN interface has a
+smaller MTU, the previous section applies.
 
 ## Versioning
 
