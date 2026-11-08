@@ -157,6 +157,18 @@ Standard Reticulum interface options (`mode`, `ifac_netname`,
 (`command = roe eth0`). That needs no extra module, but it is about six
 times slower; see [docs/testing.md](docs/testing.md).
 
+## As a library
+
+The crate also exposes the pieces `roe` is built from: the frame format,
+the raw socket and the framings towards Reticulum. They are meant for
+projects that want to speak RoE directly, such as a Reticulum
+implementation in Rust. See the
+[API documentation](https://docs.rs/reticulum-over-ethernet).
+
+```sh
+cargo add reticulum-over-ethernet
+```
+
 ## Building
 
 ```sh

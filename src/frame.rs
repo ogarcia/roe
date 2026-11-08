@@ -11,16 +11,25 @@
 //! follow. The explicit length is needed because Ethernet pads short frames
 //! up to 60 bytes, so the frame size alone does not tell the payload size.
 
+/// EtherType of RoE frames: IEEE "Local Experimental Ethertype 1".
 pub const ETHERTYPE: u16 = 0x88B5;
-pub const MAGIC: u8 = 0x52; // 'R'
+/// First byte of the RoE header (ASCII `R`), to tell RoE frames apart from
+/// other experiments using the same EtherType.
+pub const MAGIC: u8 = 0x52;
+/// Version of the frame format described by this module.
 pub const VERSION: u8 = 0x01;
 
+/// Length of a MAC address in bytes.
 pub const MAC_LEN: usize = 6;
+/// Length of the Ethernet header: destination, source and EtherType.
 pub const ETH_HEADER_LEN: usize = 14;
+/// Length of the RoE header: magic, version and payload length.
 pub const ROE_HEADER_LEN: usize = 4;
+/// Length of both headers, before the payload.
 pub const HEADER_LEN: usize = ETH_HEADER_LEN + ROE_HEADER_LEN;
 /// Standard Ethernet payload size, without jumbo frames.
 pub const ETH_MTU: usize = 1500;
+/// Largest Reticulum packet a frame can carry on a standard interface.
 pub const MAX_PAYLOAD: usize = ETH_MTU - ROE_HEADER_LEN;
 /// Reticulum's base MTU: every interface must carry packets of this size.
 pub const RETICULUM_MTU: usize = 500;
@@ -38,16 +47,30 @@ pub fn max_payload_for(if_mtu: usize) -> usize {
 /// Reticulum traffic reach their kernel.
 pub const GROUP: Mac = [0x03, 0x52, 0x4E, 0x53, 0x00, 0x01];
 
+/// A MAC address.
 pub type Mac = [u8; MAC_LEN];
 
+/// Why a frame could not be built or parsed.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Error {
+    /// The payload, of this many bytes, exceeds [`MAX_PAYLOAD`].
     TooLong(usize),
+    /// The frame is shorter than [`HEADER_LEN`].
     Truncated,
+    /// The frame has this EtherType instead of [`ETHERTYPE`].
     WrongEtherType(u16),
+    /// The frame has this magic byte instead of [`MAGIC`]: another protocol
+    /// using the same experimental EtherType.
     WrongMagic(u8),
+    /// The frame uses this version of the format, which is not supported.
     UnsupportedVersion(u8),
-    BadLength { declared: usize, available: usize },
+    /// The length field promises more payload than the frame holds.
+    BadLength {
+        /// Payload length stated in the header.
+        declared: usize,
+        /// Bytes actually present after the header.
+        available: usize,
+    },
 }
 
 impl std::fmt::Display for Error {
@@ -92,8 +115,11 @@ pub fn build(dst: &Mac, src: &Mac, payload: &[u8]) -> Result<Vec<u8>, Error> {
 /// A received frame, borrowing its payload from the receive buffer.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Frame<'a> {
+    /// Destination MAC address, normally [`GROUP`].
     pub dst: Mac,
+    /// MAC address of the sending interface.
     pub src: Mac,
+    /// The Reticulum packet, without any Ethernet padding.
     pub payload: &'a [u8],
 }
 

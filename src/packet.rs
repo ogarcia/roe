@@ -7,7 +7,9 @@ use std::io;
 use std::mem;
 use std::os::fd::RawFd;
 
+/// Standard input, where `roe --packet` receives packets from Reticulum.
 pub const STDIN: RawFd = 0;
+/// Standard output, where `roe --packet` delivers packets to Reticulum.
 pub const STDOUT: RawFd = 1;
 
 /// Fails unless `fd` is a `SOCK_SEQPACKET` socket.

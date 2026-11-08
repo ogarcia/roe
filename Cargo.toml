@@ -12,6 +12,10 @@ categories = ["network-programming", "command-line-utilities"]
 # RoeInterface.py), scripts and end-to-end tests stay in the repository.
 include = ["/src/**/*.rs", "/README.md", "/README.es.md", "/docs/*.md", "/LICENSE"]
 
+[package.metadata.docs.rs]
+# The link module only exists on Linux.
+targets = ["x86_64-unknown-linux-gnu"]
+
 [[bin]]
 name = "roe"
 path = "src/main.rs"

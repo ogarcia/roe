@@ -167,6 +167,19 @@ Reticulum (`command = roe eth0`). Así no hace falta ningún módulo extra,
 pero es unas seis veces más lento; consulta
 [docs/testing.md](docs/testing.md).
 
+## Como biblioteca
+
+El crate también expone las piezas con las que está hecho `roe`: el formato
+de trama, el socket en bruto y los protocolos hacia Reticulum. Están
+pensadas para proyectos que quieran hablar RoE directamente, como una
+implementación de Reticulum en Rust. Consulta la
+[documentación de la API](https://docs.rs/reticulum-over-ethernet) (en
+inglés).
+
+```sh
+cargo add reticulum-over-ethernet
+```
+
 ## Compilación
 
 ```sh

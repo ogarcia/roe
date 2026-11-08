@@ -15,6 +15,11 @@ use crate::frame::{ETHERTYPE, GROUP, MAC_LEN, Mac};
 /// deleted interface would otherwise block forever.
 pub const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
+/// A raw Ethernet socket on one interface, carrying RoE frames only.
+///
+/// Created with [`RawLink::open`]. It is bound to the interface and to
+/// [`ETHERTYPE`], so it never sees other traffic, and has joined the RoE
+/// group address. Sending and receiving can happen from different threads.
 pub struct RawLink {
     fd: OwnedFd,
     name: CString,
@@ -120,10 +125,12 @@ impl RawLink {
         self.group_joined
     }
 
+    /// MAC address of the interface, to use as the source of frames.
     pub fn mac(&self) -> Mac {
         self.mac
     }
 
+    /// Index of the interface the socket is bound to.
     pub fn ifindex(&self) -> i32 {
         self.ifindex
     }

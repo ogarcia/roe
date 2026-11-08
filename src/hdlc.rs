@@ -3,8 +3,11 @@
 //! Every packet travels as `FLAG <escaped payload> FLAG`. Inside the payload,
 //! `FLAG` and `ESC` bytes are replaced by `ESC, byte ^ ESC_MASK`.
 
+/// Frame delimiter.
 pub const FLAG: u8 = 0x7E;
+/// Escape byte: the next byte is XORed with [`ESC_MASK`].
 pub const ESC: u8 = 0x7D;
+/// Value XORed into escaped bytes.
 pub const ESC_MASK: u8 = 0x20;
 
 /// Appends `data` to `out` as a complete HDLC frame.
