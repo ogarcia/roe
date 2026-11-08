@@ -46,6 +46,43 @@ not even an IPv6 link-local one.
   Routers do not forward these frames; Reticulum transport nodes do.
 - `CAP_NET_RAW` for the `roe` binary, or running it as root.
 
+## Installation
+
+### Arch Linux
+
+The [AUR package](https://aur.archlinux.org/packages/reticulum-over-ethernet)
+installs `/usr/bin/roe` with `CAP_NET_RAW` already set, and the
+`RoeInterface` module in `/usr/share/roe/`:
+
+```sh
+yay -S reticulum-over-ethernet      # or any other AUR helper
+```
+
+### Prebuilt binaries
+
+Every [release](https://github.com/ogarcia/roe/releases) includes static
+binaries for x86_64 and aarch64, which run on any Linux distribution:
+
+```sh
+curl -LO https://github.com/ogarcia/roe/releases/latest/download/roe-x86_64-linux-musl
+curl -LO https://github.com/ogarcia/roe/releases/latest/download/SHA256SUMS
+sha256sum --ignore-missing -c SHA256SUMS
+sudo install -m 755 roe-x86_64-linux-musl /usr/local/bin/roe
+sudo setcap cap_net_raw+ep /usr/local/bin/roe
+```
+
+`RoeInterface.py` is included in the bundles of the same release.
+
+### From source
+
+```sh
+cargo build --release
+sudo install -m 755 target/release/roe /usr/local/bin/roe
+sudo setcap cap_net_raw+ep /usr/local/bin/roe
+```
+
+`RoeInterface.py` is in `dist-files/`.
+
 ## Quick start with a bundle
 
 Bundles are self-contained test kits: a static `roe`, the `RoeInterface`
@@ -79,15 +116,16 @@ capabilities are ignored there and `roe` cannot open the interface.
 
 ## Using RoE with your own Reticulum setup
 
-Build the binary and give it the capability it needs:
+Once `roe` is [installed](#installation), put the interface module in your
+Reticulum config directory. With the AUR package, link it so that package
+updates reach it (a system-wide `/etc/reticulum` already has the link):
 
 ```sh
-cargo build --release
-sudo install -m 755 target/release/roe /usr/local/bin/roe
-sudo setcap cap_net_raw+ep /usr/local/bin/roe
+mkdir -p ~/.reticulum/interfaces
+ln -s /usr/share/roe/RoeInterface.py ~/.reticulum/interfaces/
 ```
 
-Install the interface module in your Reticulum config directory:
+Otherwise, copy it from a bundle or from `dist-files/`:
 
 ```sh
 mkdir -p ~/.reticulum/interfaces
@@ -108,7 +146,7 @@ And add an interface to `~/.reticulum/config`:
 | Option | Default | Meaning |
 |---|---|---|
 | `device` | (required) | Network interface to use. |
-| `binary` | `roe` from `PATH` | Path to the `roe` binary. |
+| `binary` | `roe` from `PATH` | Path to the `roe` binary (`/usr/bin/roe` with the AUR package). |
 | `respawn_delay` | `5` | Seconds before restarting `roe` if it exits. |
 | `verbose` | `No` | Make `roe` log every frame it sends or receives. |
 

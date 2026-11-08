@@ -53,6 +53,44 @@ necesidad de ninguna dirección IP, ni siquiera una IPv6 link-local.
   Reticulum, sí.
 - `CAP_NET_RAW` para el binario `roe`, o ejecutarlo como root.
 
+## Instalación
+
+### Arch Linux
+
+El [paquete de AUR](https://aur.archlinux.org/packages/reticulum-over-ethernet)
+instala `/usr/bin/roe` con `CAP_NET_RAW` ya asignada, y el módulo
+`RoeInterface` en `/usr/share/roe/`:
+
+```sh
+yay -S reticulum-over-ethernet      # o cualquier otro asistente de AUR
+```
+
+### Binarios precompilados
+
+Cada [release](https://github.com/ogarcia/roe/releases) incluye binarios
+estáticos para x86_64 y aarch64, que funcionan en cualquier distribución
+Linux:
+
+```sh
+curl -LO https://github.com/ogarcia/roe/releases/latest/download/roe-x86_64-linux-musl
+curl -LO https://github.com/ogarcia/roe/releases/latest/download/SHA256SUMS
+sha256sum --ignore-missing -c SHA256SUMS
+sudo install -m 755 roe-x86_64-linux-musl /usr/local/bin/roe
+sudo setcap cap_net_raw+ep /usr/local/bin/roe
+```
+
+`RoeInterface.py` va incluido en los paquetes de prueba de la misma release.
+
+### Desde el código fuente
+
+```sh
+cargo build --release
+sudo install -m 755 target/release/roe /usr/local/bin/roe
+sudo setcap cap_net_raw+ep /usr/local/bin/roe
+```
+
+`RoeInterface.py` está en `dist-files/`.
+
 ## Puesta en marcha rápida con un paquete
 
 Los paquetes son kits de prueba autocontenidos: un `roe` estático, el
@@ -86,16 +124,17 @@ abrir la interfaz. `roe-node` lo detecta y lo avisa.
 
 ## Usar RoE con tu propia instalación de Reticulum
 
-Compila el binario y dale la capacidad que necesita:
+Con `roe` ya [instalado](#instalación), pon el módulo de interfaz en el
+directorio de configuración de Reticulum. Con el paquete de AUR, enlázalo
+para que le lleguen las actualizaciones del paquete (un `/etc/reticulum` a
+nivel de sistema ya tiene el enlace):
 
 ```sh
-cargo build --release
-sudo install -m 755 target/release/roe /usr/local/bin/roe
-sudo setcap cap_net_raw+ep /usr/local/bin/roe
+mkdir -p ~/.reticulum/interfaces
+ln -s /usr/share/roe/RoeInterface.py ~/.reticulum/interfaces/
 ```
 
-Instala el módulo de interfaz en el directorio de configuración de
-Reticulum:
+Si no, cópialo de un paquete de prueba o de `dist-files/`:
 
 ```sh
 mkdir -p ~/.reticulum/interfaces
@@ -116,7 +155,7 @@ Y añade una interfaz a `~/.reticulum/config`:
 | Opción | Por defecto | Significado |
 |---|---|---|
 | `device` | (obligatoria) | Interfaz de red que se usa. |
-| `binary` | `roe` del `PATH` | Ruta al binario `roe`. |
+| `binary` | `roe` del `PATH` | Ruta al binario `roe` (`/usr/bin/roe` con el paquete de AUR). |
 | `respawn_delay` | `5` | Segundos antes de relanzar `roe` si termina. |
 | `verbose` | `No` | Hace que `roe` registre cada trama que envía o recibe. |
 
