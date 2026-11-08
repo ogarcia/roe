@@ -1,5 +1,7 @@
 # rtp: Reticulum Transmission Protocol
 
+<p align="center"><strong>English</strong> · <a href="README.es.md">Español</a></p>
+
 `rtp` (Reticulum Transmission Protocol) lets
 [Reticulum](https://reticulum.network) nodes on the same Ethernet segment
 talk to each other directly at layer 2, with their own EtherType, instead of
@@ -116,7 +118,7 @@ Standard Reticulum interface options (`mode`, `ifac_netname`,
 
 `rtp` can also run under Reticulum's built-in `PipeInterface`
 (`command = rtp eth0`). That needs no extra module, but it is about six
-times slower; see [docs/architecture.md](docs/architecture.md).
+times slower; see [docs/testing.md](docs/testing.md).
 
 ## Building
 
