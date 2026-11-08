@@ -171,7 +171,8 @@ rtp-<version>-<arch>/
 ├── rtp               static binary
 ├── RtpInterface.py   interface module
 ├── rtp-node          helper script
-└── README.es.md      instructions (Spanish)
+├── README.es.md      instructions (Spanish)
+└── LICENSE           GPL-3.0 (RtpInterface.py carries its own MIT notice)
 ```
 
 `rtp-node` keeps everything inside the unpacked directory: a venv with a

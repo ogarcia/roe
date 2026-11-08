@@ -26,6 +26,7 @@ for arch in "${ARCHES[@]}"; do
     install -m 755 dist-files/rtp-node "$stage/$name/rtp-node"
     install -m 644 dist-files/README.es.md "$stage/$name/README.es.md"
     install -m 644 dist-files/RtpInterface.py "$stage/$name/RtpInterface.py"
+    install -m 644 LICENSE "$stage/$name/LICENSE"
     tar -C "$stage" -czf "dist/$name.tar.gz" "$name"
     rm -rf "$stage"
     echo "dist/$name.tar.gz"
