@@ -164,5 +164,8 @@ up to `respawn_delay` to resume.
   driver's multicast filter, not on the CPU architecture. It has been seen
   working on real x86_64 hosts on a wired LAN; other NICs, such as the USB
   Ethernet adapters common on ARM boards, have not been tried.
+- **systemd units.** The capability behaviour in
+  [deployment.md](deployment.md) was reproduced with `capsh` and `setpriv`,
+  but the example units have not been run under systemd.
 - **Larger segments.** All tests use two or three nodes.
 - **Repeated measurements.** Each figure above comes from a single run.

@@ -212,3 +212,5 @@ La documentación detallada está en inglés:
 - [Architecture](docs/architecture.md): componentes, modelo de
   privilegios, tratamiento de fallos y plataformas.
 - [Testing](docs/testing.md): batería de tests y resultados medidos.
+- [Running as a service](docs/deployment.md): unidades de systemd, y cómo
+  obtiene `roe` `CAP_NET_RAW` cuando el servicio está aislado.

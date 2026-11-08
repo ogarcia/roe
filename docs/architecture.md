@@ -124,7 +124,9 @@ audited in one sitting.
 
 File capabilities are ignored on filesystems mounted `nosuid` (often
 `/tmp`) and in processes running with `no_new_privs` (some sandboxes and
-systemd units). `roe-node` checks for both and explains the problem.
+systemd units). `roe-node` checks for both and explains the problem. Under
+systemd, an ambient capability granted to `rnsd` works instead; see
+[deployment.md](deployment.md).
 
 ## Failure handling
 

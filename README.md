@@ -198,3 +198,5 @@ git config core.hooksPath .githooks
 - [Architecture](docs/architecture.md): components, privilege model,
   failure handling, platform support.
 - [Testing](docs/testing.md): test suite and measured results.
+- [Running as a service](docs/deployment.md): systemd units, and how `roe`
+  gets `CAP_NET_RAW` under sandboxing.
