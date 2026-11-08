@@ -37,7 +37,7 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3
       - name: Ruff
         run: |
           mapfile -t py < <(git ls-files '*.py')
@@ -86,7 +86,7 @@ jobs:
         with:
           targets: x86_64-unknown-linux-musl, aarch64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3
       - name: Allow unprivileged user namespaces
         # Ubuntu restricts them through AppArmor; the tests rely on them to
         # create network namespaces without root.
