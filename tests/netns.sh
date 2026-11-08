@@ -78,6 +78,17 @@ echo "addresses in the namespace (veths must have none):"
 ip -brief addr show
 
 status=0
+
+# veth delivers multicast regardless of membership, so check the NIC filter
+# explicitly: both ends must have joined the rtp group address.
+for i in veth0 veth1; do
+    if ip maddr show dev "$i" | grep -q '03:52:4e:53:00:01'; then
+        echo "$i joined group 03:52:4e:53:00:01"
+    else
+        echo "$i did NOT join group 03:52:4e:53:00:01"; status=1
+    fi
+done
+
 "$VENV/rnprobe" --config "$WORK/b" -n 3 -t 15 rnstransport.probe "$probe" || status=$?
 
 echo "--- rtp on A ---"; grep '\[rtp\]' "$WORK/a.log" | head -n 8 || true

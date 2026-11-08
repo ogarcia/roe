@@ -7,7 +7,7 @@ use std::io;
 use std::mem;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
-use crate::frame::{ETHERTYPE, MAC_LEN, Mac};
+use crate::frame::{ETHERTYPE, GROUP, MAC_LEN, Mac};
 
 pub struct RawLink {
     fd: OwnedFd,
@@ -52,6 +52,7 @@ impl RawLink {
             )
         })?;
 
+        join_group(fd.as_raw_fd(), ifindex, &GROUP)?;
         let mac = hw_addr(fd.as_raw_fd(), &cname)?;
         Ok(Self { fd, ifindex, mac })
     }
@@ -103,6 +104,26 @@ impl RawLink {
             return Ok(n);
         }
     }
+}
+
+/// Programs the NIC filter to accept frames sent to `group`. The kernel drops
+/// the membership when the socket closes.
+fn join_group(fd: libc::c_int, ifindex: i32, group: &Mac) -> io::Result<()> {
+    let mut mreq: libc::packet_mreq = unsafe { mem::zeroed() };
+    mreq.mr_ifindex = ifindex;
+    mreq.mr_type = libc::PACKET_MR_MULTICAST as u16;
+    mreq.mr_alen = MAC_LEN as u16;
+    mreq.mr_address[..MAC_LEN].copy_from_slice(group);
+    cvt(unsafe {
+        libc::setsockopt(
+            fd,
+            libc::SOL_PACKET,
+            libc::PACKET_ADD_MEMBERSHIP,
+            &mreq as *const _ as *const libc::c_void,
+            mem::size_of::<libc::packet_mreq>() as libc::socklen_t,
+        )
+    })?;
+    Ok(())
 }
 
 fn hw_addr(fd: libc::c_int, cname: &CString) -> io::Result<Mac> {

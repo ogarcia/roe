@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::thread;
 
-use rtp::frame::{self, BROADCAST};
+use rtp::frame::{self, GROUP};
 use rtp::hdlc;
 use rtp::link::RawLink;
 
@@ -81,7 +81,7 @@ fn tx_loop(link: &RawLink, verbose: bool) -> io::Result<()> {
         };
         for &b in &buf[..n] {
             let Some(payload) = dec.push(b) else { continue };
-            let eth = match frame::build(&BROADCAST, &src, &payload) {
+            let eth = match frame::build(&GROUP, &src, &payload) {
                 Ok(f) => f,
                 Err(e) => {
                     log!("dropped outbound packet: {e}");

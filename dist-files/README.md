@@ -46,8 +46,14 @@ ya esté funcionando en la máquina.
 sudo tcpdump -e -n -i eth0 ether proto 0x88b5
 ```
 
-Mientras haces `probe` o `send` deberían aparecer las tramas Reticulum.
-El nodo no tiene configurada ninguna interfaz IP.
+Mientras haces `probe` o `send` deberían aparecer las tramas Reticulum,
+todas dirigidas a la dirección de grupo `03:52:4e:53:00:01`. El nodo no
+tiene configurada ninguna interfaz IP.
+
+Esa dirección es multicast, no broadcast. La tarjeta de red de una máquina
+que no ejecute `rtp` descarta estas tramas por hardware. Por eso todas las
+máquinas de la prueba deben usar la misma versión del paquete. Con
+`ip maddr show dev eth0` se ve si el nodo se ha suscrito al grupo.
 
 ## Problemas conocidos
 

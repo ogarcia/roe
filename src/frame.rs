@@ -23,7 +23,13 @@ pub const HEADER_LEN: usize = ETH_HEADER_LEN + RTP_HEADER_LEN;
 pub const ETH_MTU: usize = 1500;
 pub const MAX_PAYLOAD: usize = ETH_MTU - RTP_HEADER_LEN;
 
-pub const BROADCAST: [u8; MAC_LEN] = [0xFF; MAC_LEN];
+/// Group address every node sends to and listens on.
+///
+/// Locally administered multicast (first octet `0x03`), followed by "RNS"
+/// in ASCII. Unlike broadcast, NICs of hosts that have not joined the group
+/// drop these frames in hardware, so bystanders on the segment never see
+/// Reticulum traffic reach their kernel.
+pub const GROUP: Mac = [0x03, 0x52, 0x4E, 0x53, 0x00, 0x01];
 
 pub type Mac = [u8; MAC_LEN];
 
@@ -118,21 +124,21 @@ mod tests {
 
     #[test]
     fn roundtrip() {
-        let f = build(&BROADCAST, &SRC, b"hello").unwrap();
+        let f = build(&GROUP, &SRC, b"hello").unwrap();
         let p = parse(&f).unwrap();
-        assert_eq!(p, Frame { dst: BROADCAST, src: SRC, payload: b"hello" });
+        assert_eq!(p, Frame { dst: GROUP, src: SRC, payload: b"hello" });
     }
 
     #[test]
     fn ignores_ethernet_padding() {
-        let mut f = build(&BROADCAST, &SRC, b"hi").unwrap();
+        let mut f = build(&GROUP, &SRC, b"hi").unwrap();
         f.resize(60, 0);
         assert_eq!(parse(&f).unwrap().payload, b"hi");
     }
 
     #[test]
     fn rejects_foreign_and_broken_frames() {
-        let good = build(&BROADCAST, &SRC, b"x").unwrap();
+        let good = build(&GROUP, &SRC, b"x").unwrap();
 
         let mut f = good.clone();
         f[12..14].copy_from_slice(&0x0800u16.to_be_bytes());
@@ -156,8 +162,8 @@ mod tests {
     #[test]
     fn payload_limits() {
         let max = vec![0u8; MAX_PAYLOAD];
-        assert_eq!(build(&BROADCAST, &SRC, &max).unwrap().len(), HEADER_LEN + ETH_MTU - RTP_HEADER_LEN);
+        assert_eq!(build(&GROUP, &SRC, &max).unwrap().len(), HEADER_LEN + ETH_MTU - RTP_HEADER_LEN);
         let over = vec![0u8; MAX_PAYLOAD + 1];
-        assert_eq!(build(&BROADCAST, &SRC, &over), Err(Error::TooLong(MAX_PAYLOAD + 1)));
+        assert_eq!(build(&GROUP, &SRC, &over), Err(Error::TooLong(MAX_PAYLOAD + 1)));
     }
 }
