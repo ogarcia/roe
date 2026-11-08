@@ -61,3 +61,11 @@ máquinas de la prueba deben usar la misma versión del paquete. Con
   EtherTypes que no conocen.
 - `rtp` termina si no puede abrir la interfaz. `rnsd` lo reintenta cada 2 s,
   así que en el log aparecerá el error repetido.
+
+## Comparar con UDP
+
+`./rtp-node start --udp eth0` arranca el nodo con la `AutoInterface` de
+Reticulum (UDP sobre IPv6 link-local) en lugar de `rtp`, para comparar
+rendimiento con la misma prueba de `send`. Necesita que el cortafuegos deje
+pasar UDP en los puertos 29716 y 42671; `rtp` no lo necesita, porque trabaja
+por debajo de IP.
