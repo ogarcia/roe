@@ -119,7 +119,7 @@ scripts/pack.sh                     # genera dist/roe-<versión>-{x86_64,aarch64
 En cada máquina:
 
 ```sh
-tar xzf roe-0.1.0-x86_64.tar.gz && cd roe-0.1.0-x86_64/
+tar xzf roe-*-x86_64.tar.gz && cd roe-*-x86_64/
 ./roe-node setup                    # instala Reticulum en ./.venv (con uv o pip)
 ./roe-node start eth0               # arranca el nodo; pide sudo una vez para setcap
 ```
