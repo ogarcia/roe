@@ -226,6 +226,14 @@ fn main() -> ExitCode {
         }
     );
 
+    if !link.group_joined() {
+        log!(
+            "warning: could not join group {} (no SOL_PACKET support, e.g. qemu user mode); \
+             frames from other nodes will only arrive if the interface does not filter multicast",
+            frame::fmt_mac(&GROUP)
+        );
+    }
+
     let rx_link = Arc::clone(&link);
     let (upstream, verbose) = (args.upstream, args.verbose);
     thread::spawn(move || {

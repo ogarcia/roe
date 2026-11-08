@@ -20,6 +20,7 @@ pub struct RawLink {
     name: CString,
     ifindex: i32,
     mac: Mac,
+    group_joined: bool,
 }
 
 /// True for errors that mean the interface is down or gone for now, rather
@@ -68,10 +69,18 @@ impl RawLink {
             )
         })?;
 
-        join_group(fd.as_raw_fd(), ifindex, &GROUP)?;
+        // Some environments cannot set SOL_PACKET options at all (qemu user
+        // mode answers ENOPROTOOPT without reaching the kernel). Carry on
+        // without the membership and let the caller warn: veth delivers
+        // group frames anyway, but a real NIC would filter them out.
+        let group_joined = match join_group(fd.as_raw_fd(), ifindex, &GROUP) {
+            Ok(()) => true,
+            Err(e) if e.raw_os_error() == Some(libc::ENOPROTOOPT) => false,
+            Err(e) => return Err(e),
+        };
         set_recv_timeout(fd.as_raw_fd(), POLL_INTERVAL)?;
         let mac = hw_addr(fd.as_raw_fd(), &cname)?;
-        Ok(Self { fd, name: cname, ifindex, mac })
+        Ok(Self { fd, name: cname, ifindex, mac, group_joined })
     }
 
     /// True while the interface name still refers to the interface this
@@ -80,6 +89,11 @@ impl RawLink {
     /// then be reopened.
     pub fn still_present(&self) -> bool {
         unsafe { libc::if_nametoindex(self.name.as_ptr()) as i32 == self.ifindex }
+    }
+
+    /// False if the NIC could not be told to accept our group address.
+    pub fn group_joined(&self) -> bool {
+        self.group_joined
     }
 
     pub fn mac(&self) -> Mac {
