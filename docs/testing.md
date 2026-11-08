@@ -141,8 +141,11 @@ up to `respawn_delay` to resume.
 
 - **Wi-Fi.** Some access points and drivers drop frames with EtherTypes they
   do not know. Untested.
-- **Physical ARM boards.** The aarch64 build is tested natively on GitHub's
-  arm64 runners, which are virtual machines using veth interfaces, but not
-  on a board with a physical NIC.
+- **Specific NIC drivers.** Both architectures are tested natively in CI,
+  aarch64 included, but on veth interfaces, which accept any multicast
+  address. Whether a physical NIC accepts the group address depends on its
+  driver's multicast filter, not on the CPU architecture. It has been seen
+  working on real x86_64 hosts on a wired LAN; other NICs, such as the USB
+  Ethernet adapters common on ARM boards, have not been tried.
 - **Larger segments.** All tests use two or three nodes.
 - **Repeated measurements.** Each figure above comes from a single run.
