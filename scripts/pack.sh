@@ -13,12 +13,19 @@ VERSION="$(cargo metadata --no-deps --format-version 1 \
 ARCHES=("$@")
 [[ ${#ARCHES[@]} -gt 0 ]] || ARCHES=(x86_64 aarch64)
 
-# rust-lld links static musl binaries for any arch, no cross gcc needed.
-export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=rust-lld
+HOST_ARCH="$(uname -m)"
+[[ "$HOST_ARCH" == arm64 ]] && HOST_ARCH=aarch64
 
 mkdir -p dist
 for arch in "${ARCHES[@]}"; do
     target="$arch-unknown-linux-musl"
+    if [[ "$arch" != "$HOST_ARCH" ]]; then
+        # Cross build: rust-lld links static musl binaries for any
+        # architecture, with no cross gcc needed. Native builds use the
+        # default linker.
+        var="CARGO_TARGET_$(echo "$target" | tr 'a-z-' 'A-Z_')_LINKER"
+        export "$var=rust-lld"
+    fi
     cargo build --quiet --release --target "$target"
     name="roe-$VERSION-$arch"
     stage="$(mktemp -d)"
