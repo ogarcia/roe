@@ -130,13 +130,18 @@ jobs:
   container:
     name: Container (${{ matrix.arch }})
     needs: build
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: x86_64
+            platform: amd64
             runner: ubuntu-26.04
           - arch: aarch64
+            platform: arm64
             runner: ubuntu-26.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
@@ -152,6 +157,60 @@ jobs:
       - run: tests/container.sh
         env:
           ENGINE: sudo podman
+      # On pushes, publish the tested image for this architecture as
+      # <branch or tag>-<platform>; container-manifest joins them.
+      - name: Push image
+        if: github.event_name == 'push'
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.ref_name }}-${{ matrix.platform }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$REGISTRY_TOKEN" | sudo podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          sudo podman tag roe-test "$IMAGE"
+          sudo podman push "$IMAGE"
+
+  container-manifest:
+    name: Container manifest
+    if: github.event_name == 'push'
+    needs: container
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+      REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      # All tags, to tell whether this one is the highest version.
+      - uses: actions/checkout@v7
+        if: github.ref_type == 'tag'
+        with:
+          fetch-depth: 0
+      # One multi-architecture image, ghcr.io/<repo>:<branch or tag>, so
+      # that pulls get the image for their own architecture.
+      - name: Push multi-architecture image
+        run: |
+          echo "$REGISTRY_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          podman manifest create "$IMAGE"
+          for platform in amd64 arm64; do
+            podman manifest add "$IMAGE" "docker://$IMAGE-$platform"
+          done
+          podman manifest inspect "$IMAGE"
+          podman manifest push --all "$IMAGE" "docker://$IMAGE"
+      # latest follows the highest release, not the last tag pushed: a fix
+      # tagged on an older series does not move it back. Pre-releases
+      # (0.2.0-rc1) are left out, as version sorting would put them first.
+      - name: Push latest
+        if: github.ref_type == 'tag'
+        run: |
+          highest="$(git tag --list '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)"
+          echo "this tag: $GITHUB_REF_NAME, highest release: $highest"
+          if [ "$GITHUB_REF_NAME" = "$highest" ]; then
+            podman manifest push --all "$IMAGE" "docker://ghcr.io/$GITHUB_REPOSITORY:latest"
+          else
+            echo "not the highest release, latest stays where it is"
+          fi
 
   release:
     name: Release

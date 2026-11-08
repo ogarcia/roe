@@ -3,6 +3,20 @@
 The `Containerfile` builds an image with Reticulum (`rnsd` and its tools),
 `roe` and `RoeInterface`, ready to run an RoE node.
 
+## Published images
+
+CI publishes the image to GitHub Container Registry for x86_64 and
+aarch64, as a single multi-architecture image:
+
+| Image | Contents |
+|---|---|
+| `ghcr.io/ogarcia/roe:master` | The latest commit on `master`. |
+| `ghcr.io/ogarcia/roe:latest` | The highest release. A fix released for an older series does not move it, and pre-releases never get it. |
+| `ghcr.io/ogarcia/roe:<version>` | A release, such as `ghcr.io/ogarcia/roe:0.1.1`. |
+
+Every image has passed the container test of its own CI run, and carries
+the same `roe` binary as that run's build artifacts and release.
+
 ## Building
 
 The image does not compile `roe`: it takes a prebuilt static binary from

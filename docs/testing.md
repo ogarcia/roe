@@ -57,7 +57,8 @@ request:
   membership is set and checked.
 
 A separate job builds the container image and runs `tests/container.sh`,
-also on both architectures.
+also on both architectures. On pushes, the tested images are published to
+GitHub Container Registry (see [container.md](container.md)).
 
 `tests/qemu.sh` is not run in CI, since the arm64 runner covers the same
 ground natively.
