@@ -75,6 +75,17 @@ write_config b 47710 b0
 "$VENV/rnsd" --config "$WORK/a" > "$WORK/a.log" 2>&1 & PID[a]=$!
 "$VENV/rnsd" --config "$WORK/b" > "$WORK/b.log" 2>&1 & PID[b]=$!
 
+# Let rnsd finish starting before rncp opens the same config directory:
+# Reticulum creates its storage directory with a check-then-create that
+# fails in whichever process loses the race.
+for n in a b; do
+    for _ in $(seq 300); do
+        grep -q 'Started rnsd' "$WORK/$n.log" && break
+        sleep 0.2
+    done
+    grep -q 'Started rnsd' "$WORK/$n.log" || { tail -n 20 "$WORK/$n.log"; fail "node $n did not start"; }
+done
+
 mkdir -p "$WORK/received"
 "$VENV/rncp" --config "$WORK/b" -v -l -n -s "$WORK/received" > "$WORK/listen.log" 2>&1 &
 PID[listen]=$!
