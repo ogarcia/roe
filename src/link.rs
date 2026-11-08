@@ -6,13 +6,29 @@ use std::ffi::CString;
 use std::io;
 use std::mem;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::time::Duration;
 
 use crate::frame::{ETHERTYPE, GROUP, MAC_LEN, Mac};
 
+/// How long `recv` blocks before returning `WouldBlock`, so callers get a
+/// chance to notice that the interface has been removed. A socket bound to a
+/// deleted interface would otherwise block forever.
+pub const POLL_INTERVAL: Duration = Duration::from_secs(1);
+
 pub struct RawLink {
     fd: OwnedFd,
+    name: CString,
     ifindex: i32,
     mac: Mac,
+}
+
+/// True for errors that mean the interface is down or gone for now, rather
+/// than a fault in the socket itself.
+pub fn is_link_down(e: &io::Error) -> bool {
+    matches!(
+        e.raw_os_error(),
+        Some(libc::ENETDOWN | libc::ENXIO | libc::ENODEV | libc::ENOBUFS)
+    )
 }
 
 fn cvt(ret: libc::c_int) -> io::Result<libc::c_int> {
@@ -53,8 +69,17 @@ impl RawLink {
         })?;
 
         join_group(fd.as_raw_fd(), ifindex, &GROUP)?;
+        set_recv_timeout(fd.as_raw_fd(), POLL_INTERVAL)?;
         let mac = hw_addr(fd.as_raw_fd(), &cname)?;
-        Ok(Self { fd, ifindex, mac })
+        Ok(Self { fd, name: cname, ifindex, mac })
+    }
+
+    /// True while the interface name still refers to the interface this
+    /// socket is bound to. False once it has been removed, even if another
+    /// interface has since appeared under the same name: the socket must
+    /// then be reopened.
+    pub fn still_present(&self) -> bool {
+        unsafe { libc::if_nametoindex(self.name.as_ptr()) as i32 == self.ifindex }
     }
 
     pub fn mac(&self) -> Mac {
@@ -76,10 +101,11 @@ impl RawLink {
         Ok(())
     }
 
-    /// Receives the next frame addressed to this host (or broadcast).
+    /// Receives the next frame addressed to this host or to our group.
     ///
     /// Frames we transmitted ourselves are skipped, so a caller never sees
-    /// its own traffic looped back.
+    /// its own traffic looped back. Returns `WouldBlock` after
+    /// [`POLL_INTERVAL`] without traffic.
     pub fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
         loop {
             let mut from: libc::sockaddr_ll = unsafe { mem::zeroed() };
@@ -104,6 +130,23 @@ impl RawLink {
             return Ok(n);
         }
     }
+}
+
+fn set_recv_timeout(fd: libc::c_int, timeout: Duration) -> io::Result<()> {
+    let tv = libc::timeval {
+        tv_sec: timeout.as_secs() as _,
+        tv_usec: timeout.subsec_micros() as _,
+    };
+    cvt(unsafe {
+        libc::setsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_RCVTIMEO,
+            &tv as *const _ as *const libc::c_void,
+            mem::size_of::<libc::timeval>() as libc::socklen_t,
+        )
+    })?;
+    Ok(())
 }
 
 /// Programs the NIC filter to accept frames sent to `group`. The kernel drops

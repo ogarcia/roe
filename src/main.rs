@@ -14,7 +14,7 @@ use std::thread;
 
 use rtp::frame::{self, GROUP};
 use rtp::hdlc;
-use rtp::link::RawLink;
+use rtp::link::{self, RawLink};
 use rtp::packet;
 
 const USAGE: &str = "usage: rtp [-v] [--packet] <interface>";
@@ -53,15 +53,34 @@ macro_rules! log {
 }
 
 /// Ethernet -> upstream. Returns only on a fatal error.
+///
+/// While the interface is down the socket is kept: once it comes back up,
+/// traffic resumes on it. If the interface is removed, this returns so the
+/// process exits and gets restarted, reopening the interface by name.
 fn rx_loop(link: &RawLink, upstream: Upstream, verbose: bool) -> io::Error {
     let mut buf = vec![0u8; 2048];
     let mut out = Vec::with_capacity(4096);
     let mut stdout = io::stdout().lock();
+    let mut down = false;
     loop {
         let n = match link.recv(&mut buf) {
             Ok(n) => n,
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock || link::is_link_down(&e) => {
+                if !link.still_present() {
+                    return io::Error::new(io::ErrorKind::NotFound, "interface was removed");
+                }
+                if link::is_link_down(&e) && !down {
+                    log!("interface down ({e}), waiting for it to come back");
+                    down = true;
+                }
+                continue;
+            }
             Err(e) => return e,
         };
+        if down {
+            log!("interface back up");
+            down = false;
+        }
         let f = match frame::parse(&buf[..n]) {
             Ok(f) => f,
             Err(e) => {
@@ -89,7 +108,17 @@ fn rx_loop(link: &RawLink, upstream: Upstream, verbose: bool) -> io::Error {
 }
 
 /// Sends one packet from upstream as an Ethernet frame.
-fn transmit(link: &RawLink, src: &frame::Mac, payload: &[u8], verbose: bool) -> io::Result<()> {
+///
+/// While the interface is down, packets are dropped instead of failing:
+/// Reticulum already copes with loss. `dropping` tracks that state so the
+/// outage is logged once, not once per packet.
+fn transmit(
+    link: &RawLink,
+    src: &frame::Mac,
+    payload: &[u8],
+    dropping: &mut bool,
+    verbose: bool,
+) -> io::Result<()> {
     let eth = match frame::build(&GROUP, src, payload) {
         Ok(f) => f,
         Err(e) => {
@@ -97,7 +126,22 @@ fn transmit(link: &RawLink, src: &frame::Mac, payload: &[u8], verbose: bool) -> 
             return Ok(());
         }
     };
-    link.send(&eth)?;
+    match link.send(&eth) {
+        Ok(()) => {
+            if *dropping {
+                log!("sending again");
+                *dropping = false;
+            }
+        }
+        Err(e) if link::is_link_down(&e) => {
+            if !*dropping {
+                log!("cannot send ({e}), dropping packets until the interface is back");
+                *dropping = true;
+            }
+            return Ok(());
+        }
+        Err(e) => return Err(e),
+    }
     if verbose {
         log!("tx {} bytes", payload.len());
     }
@@ -107,6 +151,7 @@ fn transmit(link: &RawLink, src: &frame::Mac, payload: &[u8], verbose: bool) -> 
 /// HDLC stdin -> Ethernet. Returns when stdin closes or on a fatal error.
 fn tx_loop_hdlc(link: &RawLink, verbose: bool) -> io::Result<()> {
     let src = link.mac();
+    let mut dropping = false;
     let mut dec = hdlc::Decoder::new(frame::MAX_PAYLOAD);
     let mut buf = [0u8; 4096];
     let mut stdin = io::stdin().lock();
@@ -119,7 +164,7 @@ fn tx_loop_hdlc(link: &RawLink, verbose: bool) -> io::Result<()> {
         };
         for &b in &buf[..n] {
             if let Some(payload) = dec.push(b) {
-                transmit(link, &src, &payload, verbose)?;
+                transmit(link, &src, &payload, &mut dropping, verbose)?;
             }
         }
     }
@@ -128,6 +173,7 @@ fn tx_loop_hdlc(link: &RawLink, verbose: bool) -> io::Result<()> {
 /// Packet stdin -> Ethernet. Returns when the peer closes or on a fatal error.
 fn tx_loop_packet(link: &RawLink, verbose: bool) -> io::Result<()> {
     let src = link.mac();
+    let mut dropping = false;
     let mut buf = vec![0u8; frame::MAX_PAYLOAD + 1];
     loop {
         let n = packet::recv(packet::STDIN, &mut buf)?;
@@ -138,7 +184,7 @@ fn tx_loop_packet(link: &RawLink, verbose: bool) -> io::Result<()> {
             log!("dropped outbound packet: {n} bytes exceeds {}", frame::MAX_PAYLOAD);
             continue;
         }
-        transmit(link, &src, &buf[..n], verbose)?;
+        transmit(link, &src, &buf[..n], &mut dropping, verbose)?;
     }
 }
 
