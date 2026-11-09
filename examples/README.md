@@ -116,11 +116,10 @@ hop), bring the link up and echo the message back:
 
 | Example | Link round trip | Echo |
 |---|---|---|
-| `reticulum-rs-process` | 1.0 ms | 100 ms |
-| `reticulum-rs-linked` | 0.8 ms | 100 ms |
-| `rsreticulum-process` | 12.4 ms | 100 ms |
+| `reticulum-rs-process` | 1.1 ms | 0.9 ms |
+| `reticulum-rs-linked` | 1.0 ms | 0.9 ms |
+| `rsreticulum-process` | 12.7 ms | 0.8 ms |
 
-The echo takes the same 100 ms with the three examples and both
-implementations, while the link round trip, which crosses RoE in both
-directions, takes about a millisecond: the extra time is not spent on the
-wire. It has not been looked into further.
+The link round trip is measured by Python Reticulum while the link comes
+up, which includes the key exchange on the other end; the echo is one
+message on the established link, there and back.

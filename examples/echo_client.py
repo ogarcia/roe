@@ -5,6 +5,7 @@
 # Usage: python echo_client.py <configdir> <destination hash> [message]
 
 import sys
+import threading
 import time
 
 import RNS
@@ -40,15 +41,25 @@ def main():
     wait("the link to come up", lambda: link.status == RNS.Link.ACTIVE)
     print(f"link active, rtt {link.rtt * 1000:.1f} ms")
 
+    # Timed from the packet callback, not by polling, which would round the
+    # time up to the polling interval.
     replies = []
-    link.set_packet_callback(lambda data, packet: replies.append(data))
-    started = time.time()
+    arrived = threading.Event()
+
+    def on_packet(data, packet):
+        replies.append((time.monotonic(), data))
+        arrived.set()
+
+    link.set_packet_callback(on_packet)
+    started = time.monotonic()
     RNS.Packet(link, message).send()
-    wait("the echo", lambda: replies)
-    elapsed = (time.time() - started) * 1000
-    if replies[0] != message:
-        sys.exit(f"FAIL: sent {message!r}, got back {replies[0]!r}")
-    print(f"echo received in {elapsed:.1f} ms: {replies[0].decode()}")
+    if not arrived.wait(TIMEOUT):
+        sys.exit("FAIL: timed out waiting for the echo")
+    received, reply = replies[0]
+    elapsed = (received - started) * 1000
+    if reply != message:
+        sys.exit(f"FAIL: sent {message!r}, got back {reply!r}")
+    print(f"echo received in {elapsed:.1f} ms: {reply.decode()}")
     link.teardown()
 
 
