@@ -160,12 +160,15 @@ A laptop on Wi-Fi and a wired desktop, through the access point, 1 hop:
 |---|---|---|
 | Everything to the group, laptop in power save | ~375 ms | some |
 | Everything to the group, power save off | ~315 ms | none |
-| Unicast to known neighbors | 5–6 ms | none |
+| Unicast to known neighbors, power save off | 5–6 ms | none |
+| Unicast to known neighbors, power save back to default (on) | 4–5 ms | none |
 
 A capture on the desktop showed it answering each probe in half a
 millisecond: with multicast, the rest of the round trip was the access
 point holding the replies to the laptop until its next DTIM beacon, as it
-does while any of its stations is in power save. With unicast, a 262 KB
+does while any of its stations is in power save. Unicast frames are
+acknowledged and retransmitted, and the laptop fetches them as soon as a
+beacon announces them, so power save on the laptop no longer matters. With unicast, a 262 KB
 file went from the desktop to the laptop at 20.9 Mbps.
 
 ### aarch64 under qemu
