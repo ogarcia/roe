@@ -179,14 +179,19 @@ times slower; see [docs/testing.md](docs/testing.md).
 ## As a library
 
 The crate also exposes the pieces `roe` is built from: the frame format,
-the raw socket and the framings towards Reticulum. They are meant for
-projects that want to speak RoE directly, such as a Reticulum
-implementation in Rust. See the
+the raw socket, the neighbor table and the framings towards Reticulum.
+They are meant for projects that want to speak RoE directly, such as a
+Reticulum implementation in Rust. See the
 [API documentation](https://docs.rs/reticulum-over-ethernet).
 
 ```sh
 cargo add reticulum-over-ethernet
 ```
+
+A Rust implementation can also run `roe` as a helper process instead,
+which needs no linking, so it works whatever the implementation's license
+is. [examples/](examples) shows both ways with Reticulum-rs and
+rsReticulum, tested against Python Reticulum.
 
 ## Building
 

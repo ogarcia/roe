@@ -1,0 +1,19 @@
+# Example: rsReticulum talking RoE through the roe helper process, with the
+# PipeInterface that rsReticulum already has. No interface code at all.
+#
+# Not part of the reticulum-over-ethernet crate, and not linked against it,
+# so the license of rsReticulum is not a problem. See README.md.
+[package]
+name = "roe-example-rsreticulum-process"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+# A standalone package, not a member of the roe crate.
+[workspace]
+
+[dependencies]
+# Pinned to a known commit, after the 1.4.0 release.
+rns-runtime = { git = "https://github.com/ratspeak/rsReticulum", rev = "b8c1446" }
+tokio = { version = "1", features = ["full"] }

@@ -38,6 +38,7 @@ work directory and logs with `KEEP=1`.
 | `tests/bridge.sh` | A transport node bridging RoE and TCP: a node with only RoE finds and exchanges files with a node with only TCP, 2 hops away. |
 | `tests/vlan.sh` | Two clients on different 802.1Q VLANs of one trunk, and a transport node with an `RoeInterface` on each VLAN: reachability over a VLAN, a 2-hop path and a file transfer across VLANs, and no connectivity between VLANs without the transport node. |
 | `tests/unicast.sh` | Two nodes and an empty third port on a learning bridge: probe, a file transfer whose frames almost never reach the third port, and, with `unicast = No`, the same transfer flooded to it. |
+| `tests/examples.sh <example>` | One of the Rust examples in [examples/](../examples) (Reticulum-rs or rsReticulum) against a Python node: path, link and an echo. Not run in CI. |
 | `tests/container.sh` | Builds the container image and runs two nodes in containers on a bridge network; one probes the other over RoE. Uses `container/roe` if present (CI puts the build job's binary there), builds it otherwise. Needs a root container engine (`ENGINE="sudo podman"`). |
 | `tests/qemu.sh` | `tests/bundle.sh` with the aarch64 build run under qemu user-mode emulation, to test it locally without ARM hardware. |
 

@@ -190,8 +190,8 @@ pero es unas seis veces más lento; consulta
 ## Como biblioteca
 
 El crate también expone las piezas con las que está hecho `roe`: el formato
-de trama, el socket en bruto y los protocolos hacia Reticulum. Están
-pensadas para proyectos que quieran hablar RoE directamente, como una
+de trama, el socket en bruto, la tabla de vecinos y los protocolos hacia
+Reticulum. Están pensadas para proyectos que quieran hablar RoE directamente, como una
 implementación de Reticulum en Rust. Consulta la
 [documentación de la API](https://docs.rs/reticulum-over-ethernet) (en
 inglés).
@@ -199,6 +199,11 @@ inglés).
 ```sh
 cargo add reticulum-over-ethernet
 ```
+
+Una implementación en Rust también puede lanzar `roe` como proceso aparte,
+sin enlazar nada, y así le sirve tenga la licencia que tenga.
+[examples/](examples) muestra las dos formas con Reticulum-rs y
+rsReticulum, probadas contra Reticulum en Python (en inglés).
 
 ## Compilación
 
