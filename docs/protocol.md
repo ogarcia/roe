@@ -27,7 +27,7 @@ All multi-byte fields are big-endian (network byte order).
 
 | Offset | Size | Field | Value |
 |---|---|---|---|
-| 0 | 6 | Destination MAC | Always the group address `03:52:4e:53:00:01`. |
+| 0 | 6 | Destination MAC | The group address `03:52:4e:53:00:01`, or a neighbor's MAC (see [Addressing](#addressing)). |
 | 6 | 6 | Source MAC | MAC address of the sending interface. |
 | 12 | 2 | EtherType | `0x88B5`. |
 | 14 | 1 | Magic | `0x52` (ASCII `R`). |
@@ -66,12 +66,15 @@ A receiver:
 
 The payload is the Reticulum packet exactly as Reticulum hands it to any
 interface, including the IFAC field when the interface has an
-[Interface Access Code](#security-considerations) configured. `roe` does not
-look into it.
+[Interface Access Code](#security-considerations) configured. `roe` only
+reads its header, to choose the destination MAC, and never changes it.
 
 ## Addressing
 
-Every frame is sent to the group address `03:52:4e:53:00:01`:
+### The group address
+
+Frames that every node should receive go to the group address
+`03:52:4e:53:00:01`:
 
 - The first octet, `0x03`, has both the individual/group bit and the
   universal/local bit set: it is a **locally administered multicast**
@@ -85,29 +88,69 @@ reach their kernel. Broadcast would interrupt every host on the segment for
 every Reticulum packet.
 
 Switches do not snoop group membership for non-IP multicast, so they flood
-these frames to every port, as they do with broadcast. The gain is in the
-hosts, not in the switch.
+these frames to every port, as they do with broadcast.
 
-### Why no unicast
+### Unicast to known neighbors
 
 Reticulum is designed for shared media such as radio, where every node
-hears every packet, and its packets carry no source address. `roe` presents
-the Ethernet segment to Reticulum in the same way: as one shared medium.
+hears every packet, and `roe` presents the Ethernet segment to it in the
+same way. Most packets are meant for a single neighbor, though, and on some
+media multicast costs much more than unicast. Wi-Fi is the clearest case:
+an access point holds multicast frames until the next DTIM beacon whenever
+any of its stations is in power save, which adds hundreds of milliseconds,
+and sends them at its lowest rate, without acknowledgements or
+retransmissions.
 
-Sending to individual MAC addresses would need a table from Reticulum
-destinations or links to MACs, learnt by peeking into packets. That would
-duplicate, at the link layer, decisions that belong to Reticulum's
-transport. On a switched LAN the bandwidth saved is not worth it.
+So `roe` sends each packet for a known neighbor straight to that
+neighbor's MAC address. Reticulum does not tell an interface which neighbor
+a packet is for, but its packet header, which is not encrypted, says
+enough to work it out from the traffic already received. For every packet
+it receives, `roe` notes the source MAC against a key from the header:
+
+| Received packet | Key | Used for |
+|---|---|---|
+| Announce sent by its origin (no transport id), path responses for its own destinations included | Destination hash | Packets for that destination, one hop away. |
+| Announce rebroadcast by a transport node, or a path response from its cache | Its transport id | Packets in transport, which name their next hop by that id. |
+| Link request | Link id | The proof that opens the link. |
+| Any packet on a link | Link id | Every later packet on the link. |
+| Other packet for a single destination | Packet hash | The proof for that packet. |
+
+The packet hash and the link id are computed as Reticulum does: a SHA-256
+of the low nibble of the flags and everything after the hops and transport
+id, truncated to 16 bytes; for the link id, without any signalling bytes
+after the public keys.
+
+Everything else goes to the group: announces, path requests and other
+packets for plain or group destinations, packets for neighbors not heard
+from, and packets with an interface access code, whose header is masked.
+A key heard from two different MACs is ambiguous and also goes to the
+group, until it has only come from one of them for 60 seconds. Entries
+expire: 30 minutes for announces, 15 minutes after the last packet on a
+link, 2 minutes for proofs. So a wrong or missing entry costs at most what
+multicast costs, never a packet that multicast would have delivered.
+
+Unicast changes nothing for Reticulum: a node only acts on packets in
+transport that name it, on links it is part of, and on packets for its own
+destinations, so the neighbors that no longer receive a packet would have
+dropped it anyway. It also changes nothing in the frame format, and older
+`roe` releases, which send everything to the group, accept unicast frames,
+so both can share a segment.
+
+`roe --no-unicast`, or `unicast = No` in the `RoeInterface` configuration,
+sends everything to the group, as releases before unicast did.
 
 ### Receiving
 
 `roe` binds a packet socket to its interface and to EtherType `0x88B5`. The
 kernel delivers every matching frame that the NIC accepts: the group
 address, broadcast, the interface's own unicast address, or anything at all
-in promiscuous mode. Receivers do not check the destination MAC.
+in promiscuous mode.
 
-Frames that the host itself transmitted are skipped (packet type
-`PACKET_OUTGOING`), so a node never hears its own packets.
+`roe` skips frames that the host itself transmitted (packet type
+`PACKET_OUTGOING`), so a node never hears its own packets, and unicast
+frames for other hosts (`PACKET_OTHERHOST`), which only arrive in
+promiscuous mode. It accepts everything else without checking the
+destination MAC.
 
 ## MTU
 

@@ -78,11 +78,13 @@ Para comparar rendimiento con la misma prueba de `send`:
   debajo de IP.
 
 Con `ROE_VERBOSE=1 ./roe-node start eth0`, `roe` registra cada trama que
-envía o recibe.
+envía o recibe, y a qué dirección. Con `ROE_UNICAST=0`, envía todas las
+tramas al grupo multicast, en vez de mandar los paquetes para un vecino
+conocido directamente a su dirección MAC.
 
 ## Problemas conocidos
 
-- Por Wi-Fi puede no funcionar. Algunos puntos de acceso o drivers descartan
-  EtherTypes que no conocen.
+- Por Wi-Fi se ha visto funcionar a través de un punto de acceso, pero otros
+  puntos de acceso o drivers pueden descartar EtherTypes que no conocen.
 - `roe` termina si no puede abrir la interfaz. `rnsd` lo reintenta cada 2 s,
   así que en el log aparecerá el error repetido.

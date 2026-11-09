@@ -77,11 +77,13 @@ To compare throughput with the same `send` test:
   ports 29716 and 42671; `roe` does not, because it works below IP.
 
 With `ROE_VERBOSE=1 ./roe-node start eth0`, `roe` logs every frame it sends
-or receives.
+or receives, and to which address. With `ROE_UNICAST=0`, it sends every
+frame to the multicast group, instead of sending packets for a known
+neighbor straight to its MAC address.
 
 ## Known issues
 
-- It may not work over Wi-Fi. Some access points or drivers drop EtherTypes
-  they do not know.
+- Over Wi-Fi it has been seen working through an access point, but other
+  access points or drivers may drop EtherTypes they do not know.
 - `roe` exits if it cannot open the interface. `rnsd` retries every 2 s, so
   the error shows up repeatedly in the log.

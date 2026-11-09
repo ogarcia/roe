@@ -34,7 +34,7 @@ There are three pieces:
 `roe` has no configuration besides its command line:
 
 ```
-roe [-v] [--packet] <interface>
+roe [-v] [--packet] [--no-unicast] <interface>
 ```
 
 At startup it:
@@ -52,10 +52,16 @@ At startup it:
 Then it runs two loops:
 
 - the **receive thread** reads frames from the socket, validates them
-  ([protocol.md](protocol.md#length-and-padding)) and writes each payload
-  upstream, to standard output;
+  ([protocol.md](protocol.md#length-and-padding)), learns from each one
+  where its sender is, and writes each payload upstream, to standard
+  output;
 - the **main thread** reads packets from standard input, wraps each one in
-  a frame and sends it.
+  a frame and sends it, to the neighbor it is for when that is known, or to
+  the group otherwise
+  ([protocol.md](protocol.md#unicast-to-known-neighbors)).
+
+The two loops share the neighbor table behind a mutex. `--no-unicast`
+leaves it out, and every frame goes to the group.
 
 The upstream framing is either HDLC, for Reticulum's `PipeInterface`, or
 one packet per `SOCK_SEQPACKET` message with `--packet`, for
@@ -72,6 +78,8 @@ The code is split into a library and a thin binary:
 | `src/hdlc.rs` | HDLC encoder and streaming decoder. |
 | `src/packet.rs` | `SOCK_SEQPACKET` helpers for packet mode. |
 | `src/link.rs` | `AF_PACKET` socket: open, send, receive, link state. Linux only. |
+| `src/neighbors.rs` | Neighbor table: which MAC each outgoing packet goes to, learnt from the Reticulum headers of received packets. |
+| `src/sha256.rs` | SHA-256, for Reticulum's packet hashes and link ids, without a dependency. |
 | `src/main.rs` | Command line, the two loops, logging. |
 
 ## RoeInterface

@@ -33,6 +33,9 @@ necesidad de ninguna dirección IP, ni siquiera una IPv6 link-local.
   10 MB fue a 72,7 Mb/s con `roe`, frente a 53,2 Mb/s con la
   `AutoInterface` de Reticulum, gracias a paquetes de 1432 bytes (consulta
   [docs/testing.md](docs/testing.md)).
+- **Unicast a vecinos conocidos.** Los paquetes para un solo vecino van a
+  su dirección MAC; solo los announces y demás difusiones usan el grupo. En
+  Wi-Fi esto evita los retrasos y pérdidas del multicast.
 - **Separación de privilegios.** Solo el pequeño binario `roe` necesita
   `CAP_NET_RAW`; `rnsd` funciona sin privilegios.
 - **Compatible con el enrutado de Reticulum.** Los nodos de transporte
@@ -173,6 +176,7 @@ Y añade una interfaz a `~/.reticulum/config`:
 | `binary` | `roe` del `PATH` | Ruta al binario `roe` (`/usr/bin/roe` con el paquete de AUR). |
 | `respawn_delay` | `5` | Segundos antes de relanzar `roe` si termina. |
 | `verbose` | `No` | Hace que `roe` registre cada trama que envía o recibe. |
+| `unicast` | `Yes` | Envía los paquetes para un vecino conocido a su dirección MAC. Con `No` todo va al grupo multicast (consulta [docs/protocol.md](docs/protocol.md#unicast-to-known-neighbors)). |
 
 Las opciones estándar de las interfaces de Reticulum (`mode`,
 `network_name`, `passphrase`, `ifac_size`, `bitrate`...) funcionan como

@@ -28,7 +28,7 @@ work directory and logs with `KEEP=1`.
 
 | Test | What it checks |
 |---|---|
-| `cargo test` | Frame building and parsing, HDLC encoding and decoding, `SOCK_SEQPACKET` message boundaries and truncation. |
+| `cargo test` | Frame building and parsing, HDLC encoding and decoding, `SOCK_SEQPACKET` message boundaries and truncation, SHA-256 test vectors, and the neighbor table against packets made by Reticulum, with the packet hashes and link ids it computes for them. |
 | `tests/netns.sh` | Two `rnsd` instances on a veth pair with no IP address, `roe` under `PipeInterface`; probe, and that both ends joined the group address. |
 | `tests/bundle.sh` | A packaged bundle, unpacked twice as if on two machines, each node in its own network namespace; probe and a file transfer. `MODE=roe\|pipe\|udp` picks the interface, `SIZE_MB` the file size. |
 | `tests/multihop.sh` | Two clients on separate segments joined only by a transport node with two `RoeInterface`s: 2-hop path, file transfer, and no connectivity once the transport node stops. |
@@ -37,6 +37,7 @@ work directory and logs with `KEEP=1`.
 | `tests/ifac.sh` | Three nodes on a bridged segment with the largest IFAC (64 bytes): nodes on the same IFAC network reach each other, a node with another key does not, and full-size packets plus the IFAC fit a frame. |
 | `tests/bridge.sh` | A transport node bridging RoE and TCP: a node with only RoE finds and exchanges files with a node with only TCP, 2 hops away. |
 | `tests/vlan.sh` | Two clients on different 802.1Q VLANs of one trunk, and a transport node with an `RoeInterface` on each VLAN: reachability over a VLAN, a 2-hop path and a file transfer across VLANs, and no connectivity between VLANs without the transport node. |
+| `tests/unicast.sh` | Two nodes and an empty third port on a learning bridge: probe, a file transfer whose frames almost never reach the third port, and, with `unicast = No`, the same transfer flooded to it. |
 | `tests/container.sh` | Builds the container image and runs two nodes in containers on a bridge network; one probes the other over RoE. Uses `container/roe` if present (CI puts the build job's binary there), builds it otherwise. Needs a root container engine (`ENGINE="sudo podman"`). |
 | `tests/qemu.sh` | `tests/bundle.sh` with the aarch64 build run under qemu user-mode emulation, to test it locally without ARM hardware. |
 
@@ -145,6 +146,28 @@ the destination on VLAN 20 2 hops away via the transport node, a 2 MB file
 crosses identical, the VLAN interfaces keep the full MTU, and with the
 transport node stopped no link can be established between the VLANs.
 
+### Unicast
+
+`tests/unicast.sh`, A and B on a bridge with an empty third port: probe
+without loss; a 2 MB transfer of 1459 frames, of which the third port
+received 1; with `unicast = No` on A, 1461.
+
+### Wi-Fi
+
+A laptop on Wi-Fi and a wired desktop, through the access point, 1 hop:
+
+| | Probe round trip | Loss |
+|---|---|---|
+| Everything to the group, laptop in power save | ~375 ms | some |
+| Everything to the group, power save off | ~315 ms | none |
+| Unicast to known neighbors | 5–6 ms | none |
+
+A capture on the desktop showed it answering each probe in half a
+millisecond: with multicast, the rest of the round trip was the access
+point holding the replies to the laptop until its next DTIM beacon, as it
+does while any of its stations is in power save. With unicast, a 262 KB
+file went from the desktop to the laptop at 20.9 Mbps.
+
 ### aarch64 under qemu
 
 `tests/qemu.sh`: both nodes run the aarch64 `roe` under
@@ -169,8 +192,9 @@ up to `respawn_delay` to resume.
 
 ## Not covered yet
 
-- **Wi-Fi.** Some access points and drivers drop frames with EtherTypes they
-  do not know. Untested.
+- **Other Wi-Fi hardware.** Only one access point and one laptop have been
+  tried (see [Wi-Fi](#wi-fi)). Other access points and drivers may drop
+  frames with EtherTypes they do not know.
 - **Specific NIC drivers.** Both architectures are tested natively in CI,
   aarch64 included, but on veth interfaces, which accept any multicast
   address. Whether a physical NIC accepts the group address depends on its
