@@ -126,6 +126,7 @@ jobs:
       - run: tests/mtu.sh
       - run: tests/ifac.sh
       - run: tests/bridge.sh
+      - run: tests/vlan.sh
 
   container:
     name: Container (${{ matrix.arch }})

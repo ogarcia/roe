@@ -147,9 +147,34 @@ declares a hardware MTU of 932 bytes.
 
 ### VLANs
 
-`roe` works on VLAN interfaces (`eth0.10` and the like) without changes:
-the kernel adds and removes the 802.1Q tag. If the VLAN interface has a
-smaller MTU, the previous section applies.
+RoE frames can travel on 802.1Q VLANs like any other Ethernet traffic. The
+VLAN tag is part of the Ethernet header, before the EtherType, so it does
+not belong in the RoE header: `roe` uses a VLAN interface, and the kernel
+(or the NIC, with VLAN offload) adds and removes the tag.
+
+```sh
+ip link add link eth0 name eth0.10 type vlan id 10
+ip link set eth0.10 up
+```
+
+```ini
+  [[VLAN 10]]
+    type = RoeInterface
+    interface_enabled = Yes
+    device = eth0.10
+```
+
+On a managed switch, the host port can be an access port on any VLAN, with
+`roe` on the plain interface, or a trunk, with a VLAN interface per VLAN on
+the host. RoE does not need the native VLAN.
+
+Each VLAN is a separate segment, to Reticulum as to IP. A transport node
+with one `RoeInterface` per VLAN routes between them, much like a router on
+a stick; `tests/vlan.sh` checks exactly that, and that nothing crosses
+between VLANs without it.
+
+VLAN interfaces normally keep a 1500-byte MTU. If one has a smaller MTU,
+the previous section applies.
 
 ## Versioning
 

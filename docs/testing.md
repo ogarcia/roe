@@ -36,6 +36,7 @@ work directory and logs with `KEEP=1`.
 | `tests/mtu.sh` | Interfaces with an MTU below 1500: hardware MTU adapted at start, no oversized frames, adaptation when the MTU drops while running, refusal to start below 504 bytes. |
 | `tests/ifac.sh` | Three nodes on a bridged segment with the largest IFAC (64 bytes): nodes on the same IFAC network reach each other, a node with another key does not, and full-size packets plus the IFAC fit a frame. |
 | `tests/bridge.sh` | A transport node bridging RoE and TCP: a node with only RoE finds and exchanges files with a node with only TCP, 2 hops away. |
+| `tests/vlan.sh` | Two clients on different 802.1Q VLANs of one trunk, and a transport node with an `RoeInterface` on each VLAN: reachability over a VLAN, a 2-hop path and a file transfer across VLANs, and no connectivity between VLANs without the transport node. |
 | `tests/container.sh` | Builds the container image and runs two nodes in containers on a bridge network; one probes the other over RoE. Uses `container/roe` if present (CI puts the build job's binary there), builds it otherwise. Needs a root container engine (`ENGINE="sudo podman"`). |
 | `tests/qemu.sh` | `tests/bundle.sh` with the aarch64 build run under qemu user-mode emulation, to test it locally without ARM hardware. |
 
@@ -52,7 +53,7 @@ request:
 - static musl builds for x86_64 and aarch64, uploaded as artifacts, both
   as bare binaries and as test bundles;
 - the end-to-end tests (`netns`, `bundle`, `multihop`, `robustness`,
-  `mtu`, `ifac`, `bridge`), natively on an x86_64 runner and on an arm64 runner. On arm64
+  `mtu`, `ifac`, `bridge`, `vlan`), natively on an x86_64 runner and on an arm64 runner. On arm64
   they run on a real aarch64 kernel, so unlike under qemu the group
   membership is set and checked.
 
@@ -136,6 +137,13 @@ Through a transport node, A → T → B (`tests/multihop.sh`):
 
 `tests/bridge.sh`, A ─RoE─ T ─TCP─ B: A finds B's destination 2 hops away
 via T, and 2 MB files cross the bridge identical in both directions.
+
+### VLANs
+
+`tests/vlan.sh`, VLANs 10 and 20 on one trunk: the client on VLAN 10 finds
+the destination on VLAN 20 2 hops away via the transport node, a 2 MB file
+crosses identical, the VLAN interfaces keep the full MTU, and with the
+transport node stopped no link can be established between the VLANs.
 
 ### aarch64 under qemu
 
