@@ -18,8 +18,8 @@ const H0: [u32; 8] = [
 
 fn compress(state: &mut [u32; 8], block: &[u8]) {
     let mut w = [0u32; 64];
-    for (i, word) in block.chunks_exact(4).enumerate() {
-        w[i] = u32::from_be_bytes(word.try_into().unwrap());
+    for (i, word) in block.as_chunks::<4>().0.iter().enumerate() {
+        w[i] = u32::from_be_bytes(*word);
     }
     for i in 16..64 {
         let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
@@ -83,8 +83,8 @@ pub fn digest(parts: &[&[u8]]) -> [u8; 32] {
     compress(&mut state, &block);
 
     let mut out = [0u8; 32];
-    for (chunk, s) in out.chunks_exact_mut(4).zip(state) {
-        chunk.copy_from_slice(&s.to_be_bytes());
+    for (chunk, s) in out.as_chunks_mut::<4>().0.iter_mut().zip(state) {
+        *chunk = s.to_be_bytes();
     }
     out
 }
