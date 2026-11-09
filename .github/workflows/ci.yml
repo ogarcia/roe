@@ -127,6 +127,7 @@ jobs:
       - run: tests/ifac.sh
       - run: tests/bridge.sh
       - run: tests/vlan.sh
+      - run: tests/unicast.sh
 
   container:
     name: Container (${{ matrix.arch }})
