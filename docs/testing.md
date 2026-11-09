@@ -48,15 +48,16 @@ the group membership explicitly with `ip maddr`.
 ## Continuous integration
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull
-request:
+request, except those that only change documentation (Markdown files and
+`docs/`). Release tags always run it in full.
 
 - rustfmt, clippy with warnings as errors, the unit tests and ruff;
 - static musl builds for x86_64 and aarch64, uploaded as artifacts, both
   as bare binaries and as test bundles;
 - the end-to-end tests (`netns`, `bundle`, `multihop`, `robustness`,
-  `mtu`, `ifac`, `bridge`, `vlan`), natively on an x86_64 runner and on an arm64 runner. On arm64
-  they run on a real aarch64 kernel, so unlike under qemu the group
-  membership is set and checked.
+  `mtu`, `ifac`, `bridge`, `vlan`, `unicast`), natively on an x86_64
+  runner and on an arm64 runner. On arm64 they run on a real aarch64
+  kernel, so unlike under qemu the group membership is set and checked.
 
 A separate job builds the container image and runs `tests/container.sh`,
 also on both architectures. On pushes, the tested images are published to
