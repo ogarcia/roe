@@ -6,18 +6,24 @@
 //!   as Reticulum's built-in `PipeInterface` expects.
 //! - Packet (`--packet`): stdin/stdout is a `SOCK_SEQPACKET` socket and each
 //!   message is one packet, as used by the `RoeInterface` module.
+//!
+//! Packets for a known neighbor are sent to its MAC address, the rest to
+//! the RoE multicast group (see the `neighbors` module); `--no-unicast`
+//! sends everything to the group.
 
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Instant;
 
 use reticulum_over_ethernet::frame::{self, GROUP};
 use reticulum_over_ethernet::hdlc;
 use reticulum_over_ethernet::link::{self, RawLink};
+use reticulum_over_ethernet::neighbors::Neighbors;
 use reticulum_over_ethernet::packet;
 
-const USAGE: &str = "usage: roe [-v] [--packet] <interface>";
+const USAGE: &str = "usage: roe [-v] [--packet] [--no-unicast] <interface>";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Upstream {
@@ -29,16 +35,19 @@ struct Args {
     ifname: String,
     verbose: bool,
     upstream: Upstream,
+    unicast: bool,
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut ifname = None;
     let mut verbose = false;
     let mut upstream = Upstream::Hdlc;
+    let mut unicast = true;
     for arg in std::env::args().skip(1) {
         match arg.as_str() {
             "-v" | "--verbose" => verbose = true,
             "--packet" => upstream = Upstream::Packet,
+            "--no-unicast" => unicast = false,
             "-h" | "--help" => return Err(USAGE.into()),
             s if s.starts_with('-') => return Err(format!("unknown option {s}\n{USAGE}")),
             s if ifname.is_none() => ifname = Some(s.to_owned()),
@@ -49,8 +58,13 @@ fn parse_args() -> Result<Args, String> {
         ifname: ifname.ok_or(USAGE)?,
         verbose,
         upstream,
+        unicast,
     })
 }
+
+/// The neighbor table, shared by the receive and transmit loops. `None`
+/// with `--no-unicast`.
+type SharedNeighbors = Option<Arc<Mutex<Neighbors>>>;
 
 macro_rules! log {
     ($($t:tt)*) => { eprintln!("[roe] {}", format!($($t)*)) };
@@ -61,7 +75,12 @@ macro_rules! log {
 /// While the interface is down the socket is kept: once it comes back up,
 /// traffic resumes on it. If the interface is removed, this returns so the
 /// process exits and gets restarted, reopening the interface by name.
-fn rx_loop(link: &RawLink, upstream: Upstream, verbose: bool) -> io::Error {
+fn rx_loop(
+    link: &RawLink,
+    neighbors: &SharedNeighbors,
+    upstream: Upstream,
+    verbose: bool,
+) -> io::Error {
     let mut buf = vec![0u8; 2048];
     let mut out = Vec::with_capacity(4096);
     let mut stdout = io::stdout().lock();
@@ -94,6 +113,9 @@ fn rx_loop(link: &RawLink, upstream: Upstream, verbose: bool) -> io::Error {
                 continue;
             }
         };
+        if let Some(n) = neighbors {
+            n.lock().unwrap().learn(&f.src, f.payload, Instant::now());
+        }
         if verbose {
             log!(
                 "rx {} bytes from {}",
@@ -118,6 +140,7 @@ fn rx_loop(link: &RawLink, upstream: Upstream, verbose: bool) -> io::Error {
 /// Sending side state shared by both upstream modes.
 struct Tx<'a> {
     link: &'a RawLink,
+    neighbors: SharedNeighbors,
     src: frame::Mac,
     /// Largest payload the interface MTU allows.
     limit: usize,
@@ -127,9 +150,10 @@ struct Tx<'a> {
 }
 
 impl<'a> Tx<'a> {
-    fn new(link: &'a RawLink, limit: usize, verbose: bool) -> Self {
+    fn new(link: &'a RawLink, neighbors: SharedNeighbors, limit: usize, verbose: bool) -> Self {
         Self {
             link,
+            neighbors,
             src: link.mac(),
             limit,
             dropping: false,
@@ -152,7 +176,12 @@ impl<'a> Tx<'a> {
             );
             return Ok(());
         }
-        let eth = match frame::build(&GROUP, &self.src, payload) {
+        let unicast = self
+            .neighbors
+            .as_ref()
+            .and_then(|n| n.lock().unwrap().next_hop(payload, Instant::now()));
+        let dst = unicast.unwrap_or(GROUP);
+        let eth = match frame::build(&dst, &self.src, payload) {
             Ok(f) => f,
             Err(e) => {
                 log!("dropped outbound packet: {e}");
@@ -185,7 +214,7 @@ impl<'a> Tx<'a> {
             Err(e) => return Err(e),
         }
         if self.verbose {
-            log!("tx {} bytes", payload.len());
+            log!("tx {} bytes to {}", payload.len(), frame::fmt_mac(&dst));
         }
         Ok(())
     }
@@ -278,7 +307,7 @@ fn main() -> ExitCode {
     }
 
     log!(
-        "up on {} (ifindex {}, mac {}, ethertype {:#06x}, {} upstream)",
+        "up on {} (ifindex {}, mac {}, ethertype {:#06x}, {} upstream, unicast {})",
         args.ifname,
         link.ifindex(),
         frame::fmt_mac(&link.mac()),
@@ -286,7 +315,8 @@ fn main() -> ExitCode {
         match args.upstream {
             Upstream::Hdlc => "hdlc",
             Upstream::Packet => "packet",
-        }
+        },
+        if args.unicast { "on" } else { "off" }
     );
 
     if !link.group_joined() {
@@ -297,15 +327,17 @@ fn main() -> ExitCode {
         );
     }
 
+    let neighbors: SharedNeighbors = args.unicast.then(|| Arc::new(Mutex::new(Neighbors::new())));
     let rx_link = Arc::clone(&link);
+    let rx_neighbors = neighbors.clone();
     let (upstream, verbose) = (args.upstream, args.verbose);
     thread::spawn(move || {
-        let e = rx_loop(&rx_link, upstream, verbose);
+        let e = rx_loop(&rx_link, &rx_neighbors, upstream, verbose);
         log!("receive loop failed: {e}");
         std::process::exit(1);
     });
 
-    let tx = Tx::new(&link, limit, args.verbose);
+    let tx = Tx::new(&link, neighbors, limit, args.verbose);
     let res = match args.upstream {
         Upstream::Hdlc => tx_loop_hdlc(tx),
         Upstream::Packet => tx_loop_packet(tx),

@@ -33,7 +33,8 @@ usage: roe-node <command> [args]
   send <file> <hash>    send a file to a node running 'listen'
 
 Run 'start' in one terminal and the other commands in another.
-Set ROE_VERBOSE=1 on 'start' to log every frame roe sends or receives.
+Set ROE_VERBOSE=1 on 'start' to log every frame roe sends or receives, and
+ROE_UNICAST=0 to send every frame to the multicast group.
 EOF
 }
 
@@ -98,7 +99,8 @@ write_config() { # iface mode
     device = $1
     binary = $BIN
     respawn_delay = 2
-    verbose = $([[ "${ROE_VERBOSE:-}" == 1 ]] && echo Yes || echo No)" ;;
+    verbose = $([[ "${ROE_VERBOSE:-}" == 1 ]] && echo Yes || echo No)
+    unicast = $([[ "${ROE_UNICAST:-1}" == 0 ]] && echo No || echo Yes)" ;;
     udp)
         # Baseline for comparison: Reticulum's own UDP over IPv6 link-local.
         # A private group_id keeps it apart from other nodes on the LAN.
@@ -111,7 +113,7 @@ write_config() { # iface mode
         iface_block="  [[Ethernet]]
     type = PipeInterface
     interface_enabled = Yes
-    command = $BIN $1
+    command = $BIN$([[ "${ROE_UNICAST:-1}" == 0 ]] && echo " --no-unicast") $1
     respawn_delay = 2" ;;
     esac
     mkdir -p "$NODE"

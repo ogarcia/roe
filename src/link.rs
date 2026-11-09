@@ -152,7 +152,8 @@ impl RawLink {
     /// Receives the next frame addressed to this host or to our group.
     ///
     /// Frames we transmitted ourselves are skipped, so a caller never sees
-    /// its own traffic looped back. Returns `WouldBlock` after
+    /// its own traffic looped back, and so are unicast frames for other
+    /// hosts, which arrive in promiscuous mode. Returns `WouldBlock` after
     /// [`POLL_INTERVAL`] without traffic.
     pub fn recv(&self, buf: &mut [u8]) -> io::Result<usize> {
         loop {
@@ -172,7 +173,12 @@ impl RawLink {
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
                 r => r?,
             };
-            if from.sll_pkttype == libc::PACKET_OUTGOING {
+            // Our own frames, and, in promiscuous mode, unicast frames for
+            // other hosts.
+            if matches!(
+                from.sll_pkttype,
+                libc::PACKET_OUTGOING | libc::PACKET_OTHERHOST
+            ) {
                 continue;
             }
             return Ok(n);

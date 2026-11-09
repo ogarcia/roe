@@ -13,6 +13,9 @@
 //!   carrying one Reticulum packet each. Pure, works anywhere.
 //! - [`link`]: a raw `AF_PACKET` socket bound to one interface, which sends
 //!   and receives RoE frames. Linux only, and opening it needs `CAP_NET_RAW`.
+//! - [`neighbors`]: learns which neighbor each Reticulum packet is for,
+//!   from the packets received, so that `roe` can send it by unicast
+//!   instead of to the multicast group. Pure, works anywhere.
 //! - [`hdlc`] and [`packet`]: the two framings `roe` uses towards Reticulum,
 //!   over a pipe (HDLC, for Reticulum's `PipeInterface`) or over a
 //!   `SOCK_SEQPACKET` socket (for `RoeInterface`).
@@ -89,4 +92,6 @@ pub mod frame;
 pub mod hdlc;
 #[cfg(target_os = "linux")]
 pub mod link;
+pub mod neighbors;
 pub mod packet;
+mod sha256;

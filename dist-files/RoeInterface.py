@@ -44,6 +44,9 @@
 #     device = eth0
 #     binary = /path/to/roe
 #     respawn_delay = 2
+#     # Packets for a known neighbor go to its MAC address; set to No to
+#     # send everything to the RoE multicast group instead.
+#     unicast = Yes
 
 import fcntl
 import os
@@ -103,6 +106,7 @@ class RoeInterface(Interface):
             c.as_float("respawn_delay") if "respawn_delay" in c else 5.0
         )
         self.verbose = c.as_bool("verbose") if "verbose" in c else False
+        self.unicast = c.as_bool("unicast") if "unicast" in c else True
 
         self.HW_MTU = RoeInterface.HW_MTU
         self.bitrate = RoeInterface.BITRATE_GUESS
@@ -136,6 +140,8 @@ class RoeInterface(Interface):
         self.update_mtu()
         ours, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         cmd = [self.binary, "--packet", self.device]
+        if not self.unicast:
+            cmd.insert(1, "--no-unicast")
         if self.verbose:
             cmd.insert(1, "-v")
         RNS.log(f"Starting {' '.join(cmd)} for {self}", RNS.LOG_VERBOSE)
